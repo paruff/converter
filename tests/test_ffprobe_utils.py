@@ -52,6 +52,6 @@ class TestProbe:
 
         with patch("subprocess.run", return_value=mock_result):
             result = probe(Path("test.mp4"))
-        
+
         # Should return None due to JSON parse error
         assert result is None

@@ -47,7 +47,7 @@ class TestCLIIntegration:
             mock_file.suffix = ".avi"
             mock_file.stat.return_value = Mock()
             mock_path_class.return_value = mock_file
-            
+
             with patch.object(sys, "argv", ["cli.py", "test.avi"]):
                 result = main()
 
@@ -67,7 +67,7 @@ class TestCLIIntegration:
             mock_dir.is_dir.return_value = True
             mock_dir.iterdir.return_value = [Mock(is_file=lambda: True, suffix=".avi")]
             mock_path_class.return_value = mock_dir
-            
+
             with patch.object(sys, "argv", ["cli.py", "/test/dir"]):
                 result = main()
 

@@ -15,41 +15,26 @@ class TestSubprocessResult:
     def test_success_property(self):
         """Test success property."""
         result = SubprocessResult(
-            returncode=0,
-            stdout="output",
-            stderr="",
-            command=["echo", "test"]
+            returncode=0, stdout="output", stderr="", command=["echo", "test"]
         )
         assert result.success is True
 
     def test_failure_property(self):
         """Test failure property."""
-        result = SubprocessResult(
-            returncode=1,
-            stdout="",
-            stderr="error",
-            command=["false"]
-        )
+        result = SubprocessResult(returncode=1, stdout="", stderr="error", command=["false"])
         assert result.success is False
 
     def test_exception_property(self):
         """Test exception in result."""
         result = SubprocessResult(
-            returncode=-1,
-            stdout="",
-            stderr="",
-            command=["test"],
-            exception=Exception("test error")
+            returncode=-1, stdout="", stderr="", command=["test"], exception=Exception("test error")
         )
         assert result.success is False
 
     def test_command_str(self):
         """Test command string representation."""
         result = SubprocessResult(
-            returncode=0,
-            stdout="",
-            stderr="",
-            command=["echo", "hello", "world"]
+            returncode=0, stdout="", stderr="", command=["echo", "hello", "world"]
         )
         assert result.command_str == "echo hello world"
 
