@@ -1,6 +1,8 @@
 import logging
 from typing import Any
 
+from .config import DEFAULT_SD_BITRATE
+
 
 class SmartMode:
     """Smart Mode bitrate scaling with SD/HD heuristics and codec-aware adjustments.
@@ -64,6 +66,54 @@ class SmartMode:
         # Future enhancement: codec-specific adjustments
         # For now, return neutral adjustment
         return 1.0
+
+    def get_bitrate(
+        self, video_stream: dict[str, Any], format_info: dict[str, Any] | None = None
+    ) -> int:
+        """Get bitrate from video stream with fallback to safe defaults.
+
+        Args:
+            video_stream: Video stream metadata from ffprobe
+            format_info: Optional format metadata from ffprobe
+
+        Returns:
+            Bitrate in bits per second
+        """
+        # Try video stream bitrate first
+        bitrate_str = video_stream.get("bit_rate")
+        if bitrate_str:
+            try:
+                bitrate = int(bitrate_str)
+                self.logger.debug(f"Using stream bitrate: {bitrate} bps")
+                return bitrate
+            except (ValueError, TypeError):
+                pass
+
+        # Try format bitrate
+        if format_info:
+            bitrate_str = format_info.get("bit_rate")
+            if bitrate_str:
+                try:
+                    bitrate = int(bitrate_str)
+                    self.logger.debug(f"Using format bitrate: {bitrate} bps")
+                    return bitrate
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback to safe SD default
+        height = video_stream.get("height", 480)
+        if height <= 480:
+            fallback_bitrate = DEFAULT_SD_BITRATE
+        elif height <= 720:
+            fallback_bitrate = int(DEFAULT_SD_BITRATE * 2.5)  # ~3000 kbps for 720p
+        else:
+            fallback_bitrate = int(DEFAULT_SD_BITRATE * 5)  # ~6000 kbps for 1080p+
+
+        self.logger.warning(
+            f"No bitrate found in metadata. Using fallback: {fallback_bitrate} bps "
+            f"(based on height={height}px)"
+        )
+        return fallback_bitrate
 
     def scale_bitrate(
         self, video_stream: dict[str, Any], base_bitrate: int

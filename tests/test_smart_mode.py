@@ -86,6 +86,47 @@ class TestSmartModeClass:
         # Since height <= 480, scale = 1.2
         assert sm.scale_bitrate(stream, 1_200_000) == 1_440_000
 
+    def test_get_bitrate_from_stream(self):
+        """Test bitrate extraction from stream."""
+        sm = SmartMode()
+        stream = {"bit_rate": "2500000", "height": 720}
+        assert sm.get_bitrate(stream) == 2_500_000
+
+    def test_get_bitrate_from_format(self):
+        """Test bitrate extraction from format when stream has none."""
+        sm = SmartMode()
+        stream = {"height": 720}
+        format_info = {"bit_rate": "3000000"}
+        assert sm.get_bitrate(stream, format_info) == 3_000_000
+
+    def test_get_bitrate_fallback_sd(self):
+        """Test fallback bitrate for SD resolution."""
+        sm = SmartMode()
+        stream = {"height": 480}
+        # Should use DEFAULT_SD_BITRATE (1200000)
+        assert sm.get_bitrate(stream) == 1_200_000
+
+    def test_get_bitrate_fallback_hd(self):
+        """Test fallback bitrate for HD resolution."""
+        sm = SmartMode()
+        stream = {"height": 720}
+        # Should use DEFAULT_SD_BITRATE * 2.5 = 3000000
+        assert sm.get_bitrate(stream) == 3_000_000
+
+    def test_get_bitrate_fallback_full_hd(self):
+        """Test fallback bitrate for Full HD resolution."""
+        sm = SmartMode()
+        stream = {"height": 1080}
+        # Should use DEFAULT_SD_BITRATE * 5 = 6000000
+        assert sm.get_bitrate(stream) == 6_000_000
+
+    def test_get_bitrate_invalid_string(self):
+        """Test fallback when bitrate string is invalid."""
+        sm = SmartMode()
+        stream = {"bit_rate": "invalid", "height": 480}
+        # Should fallback to SD default
+        assert sm.get_bitrate(stream) == 1_200_000
+
 
 class TestSmartScaleLegacy:
     """Tests for legacy smart_scale function (backward compatibility)."""
