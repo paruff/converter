@@ -31,8 +31,8 @@ class TestCLIIntegration:
             result = main()
             assert result == 1
 
-    @patch("cli.convert_file")
-    @patch("cli.Path")
+    @patch("converter.cli.convert_file")
+    @patch("converter.cli.Path")
     def test_cli_single_file(self, mock_path, mock_convert):
         """Test CLI with single file."""
         # Mock path
@@ -51,8 +51,8 @@ class TestCLIIntegration:
         assert result == 0
         mock_convert.assert_called_once()
 
-    @patch("cli.convert_directory")
-    @patch("cli.Path")
+    @patch("converter.cli.convert_directory")
+    @patch("converter.cli.Path")
     def test_cli_directory(self, mock_path, mock_convert_dir):
         """Test CLI with directory."""
         # Mock path
