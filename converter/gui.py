@@ -379,7 +379,9 @@ class MediaConverterGUI:
                                 break
 
                             self._log(f"\nProcessing: {file_path.name}")
-                            self.progress_label.config(text=f"Processing {idx}/{len(files)}: {file_path.name}")
+                            self.progress_label.config(
+                                text=f"Processing {idx}/{len(files)}: {file_path.name}"
+                            )
 
                             success = convert_file(
                                 file_path, output_dir, self.keep_original.get(), self.verbose.get()

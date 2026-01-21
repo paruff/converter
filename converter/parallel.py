@@ -1,9 +1,9 @@
 """Parallel encoding using ThreadPoolExecutor for concurrent video conversion."""
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable
 
 from .config import MAX_WORKERS
 from .progress import ProgressTracker
@@ -56,40 +56,42 @@ class ParallelEncoder:
             f"Starting parallel encoding with {self.max_workers} worker(s) for {len(files)} file(s)"
         )
 
-        with ProgressTracker(
-            total=len(files), desc="Converting files", disable=not self.show_progress
-        ) as progress:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                # Submit all jobs
-                future_to_path: dict[Future[bool], Path] = {
-                    executor.submit(convert_func, path): path for path in files
-                }
+        with (
+            ProgressTracker(
+                total=len(files), desc="Converting files", disable=not self.show_progress
+            ) as progress,
+            ThreadPoolExecutor(max_workers=self.max_workers) as executor,
+        ):
+            # Submit all jobs
+            future_to_path: dict[Future[bool], Path] = {
+                executor.submit(convert_func, path): path for path in files
+            }
 
-                # Process completed jobs
-                for future in as_completed(future_to_path):
-                    path = future_to_path[future]
-                    try:
-                        success = future.result()
-                        if success:
-                            success_count += 1
-                        else:
-                            fail_count += 1
-
-                        # Update progress bar
-                        progress.update(1)
-                        progress.set_postfix(success=success_count, failed=fail_count)
-
-                        # Call callback if provided
-                        if callback:
-                            callback(path, success)
-
-                    except Exception as e:
-                        self.logger.exception(f"Error processing {path.name}: {e}")
+            # Process completed jobs
+            for future in as_completed(future_to_path):
+                path = future_to_path[future]
+                try:
+                    success = future.result()
+                    if success:
+                        success_count += 1
+                    else:
                         fail_count += 1
-                        progress.update(1)
-                        progress.set_postfix(success=success_count, failed=fail_count)
-                        if callback:
-                            callback(path, False)
+
+                    # Update progress bar
+                    progress.update(1)
+                    progress.set_postfix(success=success_count, failed=fail_count)
+
+                    # Call callback if provided
+                    if callback:
+                        callback(path, success)
+
+                except Exception as e:
+                    self.logger.exception(f"Error processing {path.name}: {e}")
+                    fail_count += 1
+                    progress.update(1)
+                    progress.set_postfix(success=success_count, failed=fail_count)
+                    if callback:
+                        callback(path, False)
 
         self.logger.info(
             f"Parallel encoding complete: {success_count} succeeded, {fail_count} failed"

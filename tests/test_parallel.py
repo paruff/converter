@@ -1,9 +1,7 @@
 """Tests for parallel encoding functionality."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from converter.parallel import ParallelEncoder
 

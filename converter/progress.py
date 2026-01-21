@@ -12,7 +12,7 @@ except ImportError:
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from tqdm import tqdm as TqdmType
+    pass
 
 
 class ProgressTracker:
@@ -69,9 +69,7 @@ class ProgressTracker:
             self._pbar.set_postfix(**kwargs)
 
 
-def create_file_progress(
-    path: Path, total_size: int | None = None, disable: bool = False
-) -> Any:
+def create_file_progress(path: Path, total_size: int | None = None, disable: bool = False) -> Any:
     """Create a progress bar for individual file encoding.
 
     Args:
@@ -95,9 +93,8 @@ def create_file_progress(
             unit_divisor=1024,
             leave=False,
         )
-    else:
-        # Indeterminate progress
-        return tqdm(desc=desc, unit="", leave=False, bar_format="{desc}: {elapsed}")
+    # Indeterminate progress
+    return tqdm(desc=desc, unit="", leave=False, bar_format="{desc}: {elapsed}")
 
 
 class TqdmLoggingHandler(logging.Handler):
