@@ -99,18 +99,19 @@ class TestNoInplaceOverwrite:
         # Create a mock .mkv file path
         input_path = Path("/test/video.mkv")
 
-        with patch.object(Path, "exists", return_value=True):
-            with patch.object(Path, "is_file", return_value=True):
-                mock_stat = Mock()
-                mock_stat.st_mode = 0o100644  # Regular file
-                mock_stat.st_size = 1024
-                with patch.object(Path, "stat", return_value=mock_stat):
-                    convert_file(input_path, dry_run=True)
+        mock_stat = Mock()
+        mock_stat.st_mode = 0o100644  # Regular file
+        mock_stat.st_size = 1024
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(Path, "stat", return_value=mock_stat),
+        ):
+            convert_file(input_path, dry_run=True)
 
         # Verify encode was called with different paths
         mock_encode.assert_called_once()
         args = mock_encode.call_args[0]
-        input_arg = args[0]
         output_arg = args[1]
 
         # Output should be video_converted.mkv, not video.mkv
@@ -138,18 +139,19 @@ class TestNoInplaceOverwrite:
         # Create a mock .avi file path
         input_path = Path("/test/video.avi")
 
-        with patch.object(Path, "exists", return_value=True):
-            with patch.object(Path, "is_file", return_value=True):
-                mock_stat = Mock()
-                mock_stat.st_mode = 0o100644  # Regular file
-                mock_stat.st_size = 1024
-                with patch.object(Path, "stat", return_value=mock_stat):
-                    convert_file(input_path, dry_run=True)
+        mock_stat = Mock()
+        mock_stat.st_mode = 0o100644  # Regular file
+        mock_stat.st_size = 1024
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(Path, "stat", return_value=mock_stat),
+        ):
+            convert_file(input_path, dry_run=True)
 
         # Verify encode was called with different paths
         mock_encode.assert_called_once()
         args = mock_encode.call_args[0]
-        input_arg = args[0]
         output_arg = args[1]
 
         # Output should be video.mkv, different from video.avi
