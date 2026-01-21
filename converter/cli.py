@@ -187,6 +187,7 @@ def convert_directory(
     dry_run: bool = False,
     parallel: bool = True,
     max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> tuple[int, int]:
     """Convert all video files in a directory.
 
@@ -199,6 +200,7 @@ def convert_directory(
         dry_run: If True, perform dry run without actual conversion
         parallel: If True, use parallel encoding (default: True)
         max_workers: Number of parallel workers (default: from config)
+        show_progress: If True, show progress bars (default: True)
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -222,7 +224,9 @@ def convert_directory(
 
     # Use parallel encoding if enabled and more than 1 file
     if parallel and len(files) > 1:
-        encoder = ParallelEncoder(max_workers=max_workers, logger=logger)
+        encoder = ParallelEncoder(
+            max_workers=max_workers, logger=logger, show_progress=show_progress
+        )
 
         def convert_wrapper(path: Path) -> bool:
             """Wrapper for convert_file to use with parallel encoder."""
@@ -330,6 +334,12 @@ Examples:
         help=f"Number of parallel workers (default: {MAX_WORKERS})",
     )
 
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars",
+    )
+
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     args = parser.parse_args()
@@ -403,6 +413,7 @@ Examples:
             args.dry_run,
             parallel=not args.no_parallel,
             max_workers=args.workers,
+            show_progress=not args.no_progress,
         )
 
         return 0 if fail_count == 0 else 1

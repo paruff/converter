@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Multimedia :: Video :: Conversion",
 ]
 
-dependencies = []
+dependencies = ["tqdm>=4.66.0"]
 
 [project.optional-dependencies]
 dev = [

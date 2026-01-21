@@ -1,6 +1,9 @@
 # Media Converter - Requirements
 # Install with: pip install -r requirements.txt
 
+# Runtime dependencies
+tqdm>=4.66.0
+
 # Development dependencies
 pytest>=7.4.0
 pytest-cov>=4.1.0
