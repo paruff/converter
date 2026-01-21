@@ -101,7 +101,10 @@ class TestNoInplaceOverwrite:
 
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "is_file", return_value=True):
-                with patch.object(Path, "stat", return_value=Mock()):
+                mock_stat = Mock()
+                mock_stat.st_mode = 0o100644  # Regular file
+                mock_stat.st_size = 1024
+                with patch.object(Path, "stat", return_value=mock_stat):
                     convert_file(input_path, dry_run=True)
 
         # Verify encode was called with different paths
@@ -137,7 +140,10 @@ class TestNoInplaceOverwrite:
 
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "is_file", return_value=True):
-                with patch.object(Path, "stat", return_value=Mock()):
+                mock_stat = Mock()
+                mock_stat.st_mode = 0o100644  # Regular file
+                mock_stat.st_size = 1024
+                with patch.object(Path, "stat", return_value=mock_stat):
                     convert_file(input_path, dry_run=True)
 
         # Verify encode was called with different paths
