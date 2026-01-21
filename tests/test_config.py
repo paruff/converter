@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, ROOT, TMP_DIR
+from converter.config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, ROOT, TMP_DIR
 
 
 class TestConfig:

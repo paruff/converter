@@ -21,8 +21,8 @@ from tkinter import (
 )
 from tkinter.ttk import Progressbar
 
-from cli import convert_file
-from config import LOG_DIR, TMP_DIR
+from .cli import convert_file
+from .config import LOG_DIR, TMP_DIR
 
 
 class MediaConverterGUI:

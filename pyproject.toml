@@ -36,12 +36,12 @@ dev = [
 ]
 
 [project.scripts]
-media-converter = "cli:main"
-media-converter-gui = "gui:main"
+converter = "converter.cli:main"
+converter-gui = "converter.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["*"]
+include = ["converter*"]
 exclude = ["tests*", "tmp_fix*", "originals*", "logs*"]
 
 [tool.black]

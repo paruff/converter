@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from repair import repair_mpeg, repair_wmv, repair_xvid
+from converter.repair import repair_mpeg, repair_wmv, repair_xvid
 
 
 class TestRepairMpeg:

@@ -1,6 +1,6 @@
 """Tests for logging_utils module."""
 
-from logging_utils import write_log
+from converter.logging_utils import write_log
 
 
 class TestWriteLog:

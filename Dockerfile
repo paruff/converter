@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy application files
-COPY *.py /app/
+COPY converter/ /app/converter/
 COPY pyproject.toml /app/
 COPY README.md /app/
 COPY LICENSE /app/
@@ -28,5 +28,5 @@ VOLUME ["/media"]
 ENV PYTHONUNBUFFERED=1
 
 # Default command - show help
-ENTRYPOINT ["python", "-m", "cli"]
+ENTRYPOINT ["python", "-m", "converter"]
 CMD ["--help"]

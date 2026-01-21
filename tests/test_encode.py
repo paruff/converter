@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from encode import encode
+from converter.encode import encode
 
 
 class TestEncode:

@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from main import convert_file, get_bitrate
+from converter.main import convert_file, get_bitrate
 
 
 class TestGetBitrate:
@@ -17,14 +17,14 @@ class TestGetBitrate:
     def test_get_bitrate_without_value(self):
         """Test getting bitrate when value is missing."""
         info = {"video": {}}
-        from config import DEFAULT_SD_BITRATE
+        from converter.config import DEFAULT_SD_BITRATE
 
         assert get_bitrate(info) == DEFAULT_SD_BITRATE
 
     def test_get_bitrate_none_value(self):
         """Test getting bitrate when value is None."""
         info = {"video": {"bit_rate": None}}
-        from config import DEFAULT_SD_BITRATE
+        from converter.config import DEFAULT_SD_BITRATE
 
         assert get_bitrate(info) == DEFAULT_SD_BITRATE
 
@@ -32,11 +32,11 @@ class TestGetBitrate:
 class TestConvertFile:
     """Tests for convert_file function."""
 
-    @patch("main.probe")
-    @patch("main.classify_video")
-    @patch("main.smart_scale")
-    @patch("main.encode")
-    @patch("main.ORIG_DIR")
+    @patch("converter.main.probe")
+    @patch("converter.main.classify_video")
+    @patch("converter.main.smart_scale")
+    @patch("converter.main.encode")
+    @patch("converter.main.ORIG_DIR")
     def test_convert_file_h264(
         self, mock_orig_dir, mock_encode, mock_scale, mock_classify, mock_probe
     ):
@@ -60,12 +60,12 @@ class TestConvertFile:
         assert args[0] == input_path  # No repair for h264
         assert args[2] == 3000  # 2000k * 1.5
 
-    @patch("main.probe")
-    @patch("main.classify_video")
-    @patch("main.smart_scale")
-    @patch("main.repair_mpeg")
-    @patch("main.encode")
-    @patch("main.ORIG_DIR")
+    @patch("converter.main.probe")
+    @patch("converter.main.classify_video")
+    @patch("converter.main.smart_scale")
+    @patch("converter.main.repair_mpeg")
+    @patch("converter.main.encode")
+    @patch("converter.main.ORIG_DIR")
     def test_convert_file_mpeg1(
         self, mock_orig_dir, mock_encode, mock_repair, mock_scale, mock_classify, mock_probe
     ):

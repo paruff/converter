@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from config import TMP_DIR
+from .config import TMP_DIR
 
 
 def repair_mpeg(path: Path) -> Path:
