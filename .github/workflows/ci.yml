@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      run: |
+        pytest tests/ -v --cov --cov-report=xml --cov-report=term
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.12'
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black ruff
+    
+    - name: Check formatting with black
+      run: |
+        black --check .
+    
+    - name: Lint with ruff
+      run: |
+        ruff check .
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mypy
+    
+    - name: Type check with mypy
+      run: |
+        mypy --explicit-package-bases --namespace-packages cli.py config.py encode.py ffprobe_utils.py file_classifier.py gui.py logging_utils.py main.py repair.py smart_mode.py __init__.py
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: |
+        docker build -t media-converter:latest .
+    
+    - name: Test Docker image
+      run: |
+        docker run --rm media-converter:latest --version
