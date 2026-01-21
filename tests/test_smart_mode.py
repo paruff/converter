@@ -423,7 +423,7 @@ class TestContentAwareScaling:
     def test_is_not_low_complexity_high_bitrate(self):
         """Test that high bitrate content is not detected as low-complexity."""
         sm = SmartMode()
-        # 640x480@30fps with 1.2Mbps = 0.13 bpp/s (> 0.1 threshold)
+        # 640x480@30fps with 1.2Mbps = 0.13 bpp/s (> 0.08 threshold)
         stream = {
             "height": 480,
             "width": 640,

@@ -71,7 +71,6 @@ class SmartMode:
 
         Black & white detection uses pixel format indicators:
         - gray, gray8, gray16: Grayscale formats (definite B&W)
-        - yuv420p, yuvj420p with no chroma data indicators
 
         Args:
             video_stream: Video stream metadata from ffprobe
@@ -179,10 +178,10 @@ class SmartMode:
         if is_bw and is_low_comp:
             self.logger.info("Content: B&W + Low-complexity → 0.65x bitrate")
             return 0.65
-        elif is_bw:
+        if is_bw:
             self.logger.info("Content: Black & White → 0.75x bitrate")
             return 0.75
-        elif is_low_comp:
+        if is_low_comp:
             self.logger.info("Content: Low-complexity → 0.85x bitrate")
             return 0.85
 
