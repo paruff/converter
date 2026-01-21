@@ -4,15 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-try:
-    from typing import TYPE_CHECKING
-except ImportError:
-    TYPE_CHECKING = False
-
 from tqdm import tqdm
-
-if TYPE_CHECKING:
-    pass
 
 
 class ProgressTracker:

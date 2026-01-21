@@ -6,7 +6,9 @@ class MediaConverter < Formula
   desc "Robust media conversion engine for repairing and encoding legacy video formats"
   homepage "https://github.com/paruff/converter"
   url "https://github.com/paruff/converter/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "PLACEHOLDER_SHA256"
+  # TODO: Replace with actual SHA256 hash after creating v0.1.0 release
+  # Calculate with: shasum -a 256 v0.1.0.tar.gz
+  sha256 "PLACEHOLDER_SHA256_REPLACE_BEFORE_USE"
   license "MIT"
   head "https://github.com/paruff/converter.git", branch: "main"
 
