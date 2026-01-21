@@ -1,7 +1,6 @@
 """Integration tests for CLI module."""
 
 import sys
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest

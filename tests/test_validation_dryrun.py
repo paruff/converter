@@ -1,9 +1,7 @@
 """Tests for input validation and dry-run functionality."""
 
 from pathlib import Path
-from unittest.mock import Mock, patch
-
-import pytest
+from unittest.mock import patch
 
 from converter.cli import validate_path
 
@@ -76,7 +74,7 @@ class TestDryRunMode:
         test_file = tmp_path / "test.mpg"
         test_file.write_text("dummy")
 
-        result = convert_file(test_file, dry_run=True)
+        convert_file(test_file, dry_run=True)
 
         # probe should be called with dry_run=True
         assert mock_probe.called

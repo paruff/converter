@@ -87,7 +87,7 @@ class TestRunSubprocess:
         mock_result.stderr = ""
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
-            result = run_subprocess([Path("/test/path"), "arg"])
+            run_subprocess([Path("/test/path"), "arg"])
 
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
@@ -100,9 +100,11 @@ class TestRunSubprocess:
         mock_result.stdout = ""
         mock_result.stderr = "error"
 
-        with patch("subprocess.run", return_value=mock_result):
-            with pytest.raises(subprocess.CalledProcessError):
-                run_subprocess(["false"], check=True)
+        with (
+            patch("subprocess.run", return_value=mock_result),
+            pytest.raises(subprocess.CalledProcessError),
+        ):
+            run_subprocess(["false"], check=True)
 
     def test_exception_handling(self):
         """Test exception handling."""
