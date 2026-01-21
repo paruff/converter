@@ -255,7 +255,7 @@ Examples:
 
   # Keep original files
   media-converter /path/to/videos --keep-original
-  
+
   # Dry run to see what would be done
   media-converter /path/to/videos --dry-run
         """,
