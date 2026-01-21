@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import shutil
 import sys
 from pathlib import Path
 
@@ -172,7 +173,7 @@ def convert_file(
     # Handle original file
     if not dry_run and not keep_original:
         ORIG_DIR.mkdir(exist_ok=True)
-        path.rename(ORIG_DIR / path.name)
+        shutil.move(str(path), str(ORIG_DIR / path.name))
         logger.info("Moved original to originals/")
     elif dry_run and not keep_original:
         logger.info("[DRY-RUN] Would move original to originals/")
