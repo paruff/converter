@@ -39,6 +39,9 @@ def convert_file(path: Path, dry_run: bool = False) -> None:
     repaired = repair_dispatcher.dispatch(path, video_stream, dry_run=dry_run)
 
     out = path.with_suffix(".mkv")
+    if out == path:
+        # Input is already .mkv → append suffix to avoid overwriting
+        out = path.with_name(path.stem + "_converted.mkv")
     encode(repaired, out, target_kbps, dry_run=dry_run)
 
     # Move original
@@ -55,7 +58,7 @@ def convert_directory(root: Path, dry_run: bool = False) -> None:
         dry_run: If True, skip actual conversion
     """
     for path in root.iterdir():
-        if path.suffix.lower() in {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}:
+        if path.suffix.lower() in {".avi", ".mpg", ".mpeg", ".wmv", ".mov", ".mp4", ".mkv"}:
             convert_file(path, dry_run=dry_run)
 
 

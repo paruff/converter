@@ -16,7 +16,7 @@ from .repair import repair_mpeg, repair_wmv, repair_xvid
 from .smart_mode import smart_scale
 
 # Supported video file extensions
-SUPPORTED_EXTENSIONS = {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}
+SUPPORTED_EXTENSIONS = {".avi", ".mpg", ".mpeg", ".wmv", ".mov", ".mp4", ".mkv"}
 
 
 def validate_path(path: Path) -> str | None:
@@ -154,7 +154,11 @@ def convert_file(
         output_dir.mkdir(parents=True, exist_ok=True)
         out = output_dir / path.with_suffix(".mkv").name
     else:
+        # Write into same directory, but avoid overwriting input
         out = path.with_suffix(".mkv")
+        if out == path:
+            # Input is already .mkv → append suffix
+            out = path.with_name(path.stem + "_converted.mkv")
 
     logger.info(f"Output: {out}")
 
