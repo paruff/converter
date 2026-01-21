@@ -20,9 +20,15 @@ def probe(path: Path, dry_run: bool = False) -> dict[str, Any] | None:
     
     if dry_run:
         logger.info(f"[DRY-RUN] Would probe: {path}")
-        # Return minimal mock data for dry-run
+        # Return minimal mock data for dry-run with required fields
         return {
-            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+            "streams": [{
+                "codec_type": "video", 
+                "codec_name": "h264",
+                "height": 480,
+                "fps": 30.0,
+                "bit_rate": "1200000",
+            }],
             "format": {}
         }
     
