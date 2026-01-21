@@ -34,12 +34,9 @@ dev = [
     "ruff>=0.0.280",
     "mypy>=1.5.0",
 ]
-gui = [
-    "tkinter",
-]
 
 [project.scripts]
-media-converter = "main:main"
+media-converter = "cli:main"
 media-converter-gui = "gui:main"
 
 [tool.setuptools.packages.find]
