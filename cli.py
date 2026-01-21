@@ -66,7 +66,7 @@ def convert_file(
 
     if verbose:
         print(f"  Original bitrate: {bitrate // 1000} kbps")
-        print(f"  Target bitrate: {target_kbps} kbps (Smart Mode: {scale}x)")
+        print(f"  Target bitrate: {target_kbps} kbps (Smart Mode: {scale:.1f}x)")
 
     # Repair pipeline
     if codec == "mpeg1":
@@ -144,8 +144,7 @@ def convert_directory(
         files = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() in extensions]
 
     if not files:
-        if verbose:
-            print("No video files found")
+        print("No video files found")
         return 0, 0
 
     print(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
