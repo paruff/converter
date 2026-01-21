@@ -87,7 +87,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy *.py --exclude tests
+        mypy --explicit-package-bases --namespace-packages cli.py config.py encode.py ffprobe_utils.py file_classifier.py gui.py logging_utils.py main.py repair.py smart_mode.py __init__.py
 
   docker:
     name: Build Docker Image

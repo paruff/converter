@@ -51,8 +51,10 @@ target-version = ['py310']
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "PIE", "T20", "SIM", "RET"]
-ignore = ["E501"]  # Line too long (handled by black)
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "PIE", "SIM", "RET"]
+ignore = ["E501", "T201"]  # Line too long (handled by black), print statements (CLI app)
 
 [tool.mypy]
 python_version = "3.10"
@@ -65,6 +67,9 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 strict_equality = true
+explicit_package_bases = true
+namespace_packages = true
+exclude = ["tests", "setup.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -72,3 +77,4 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=. --cov-report=term-missing --cov-report=html"
+pythonpath = ["."]

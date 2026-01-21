@@ -3,13 +3,16 @@
 This is for backwards compatibility. Modern installations should use pyproject.toml.
 """
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
+with open("README.md") as f:
+    long_description = f.read()
 
 setup(
     name="media-converter",
     version="0.1.0",
     description="A robust media conversion engine for repairing and encoding legacy video formats",
-    long_description=open("README.md").read(),
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="Media Converter Team",
     license="MIT",
