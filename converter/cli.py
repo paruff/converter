@@ -5,12 +5,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, TMP_DIR
-from encode import encode
-from ffprobe_utils import probe
-from file_classifier import classify_video
-from repair import repair_mpeg, repair_wmv, repair_xvid
-from smart_mode import smart_scale
+from .config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, TMP_DIR
+from .encode import encode
+from .ffprobe_utils import probe
+from .file_classifier import classify_video
+from .repair import repair_mpeg, repair_wmv, repair_xvid
+from .smart_mode import smart_scale
 
 
 def get_bitrate(info: dict) -> int:
