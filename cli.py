@@ -39,23 +39,25 @@ def convert_file(
         True if conversion succeeded, False otherwise
     """
     if verbose:
-        pass
+        print("  Probing file...")
 
     # Probe file
     info = probe(path)
     if not info:
+        print(f"  ✗ Failed to probe file: {path.name}")
         return False
 
     # Find video stream
     video_streams = [s for s in info["streams"] if s["codec_type"] == "video"]
     if not video_streams:
+        print(f"  ✗ No video stream found in: {path.name}")
         return False
 
     video_stream = video_streams[0]
     codec = classify_video(video_stream)
 
     if verbose:
-        pass
+        print(f"  Detected codec: {codec}")
 
     # Calculate bitrate with smart scaling
     scale = smart_scale({"video": video_stream})
@@ -63,20 +65,21 @@ def convert_file(
     target_kbps = int((bitrate / 1000) * scale)
 
     if verbose:
-        pass
+        print(f"  Original bitrate: {bitrate // 1000} kbps")
+        print(f"  Target bitrate: {target_kbps} kbps (Smart Mode: {scale:.1f}x)")
 
     # Repair pipeline
     if codec == "mpeg1":
         if verbose:
-            pass
+            print("  Repairing MPEG-1 stream...")
         repaired = repair_mpeg(path)
     elif codec == "wmv":
         if verbose:
-            pass
+            print("  Repairing WMV stream...")
         repaired = repair_wmv(path)
     elif codec == "xvid":
         if verbose:
-            pass
+            print("  Repairing XviD stream...")
         repaired = repair_xvid(path)
     else:
         repaired = path
@@ -89,12 +92,13 @@ def convert_file(
         out = path.with_suffix(".mkv")
 
     if verbose:
-        pass
+        print("  Encoding to MKV...")
 
     # Encode
     try:
         encode(repaired, out, target_kbps)
-    except Exception:
+    except Exception as e:
+        print(f"  ✗ Encoding failed: {e}")
         return False
 
     # Handle original file
@@ -102,10 +106,10 @@ def convert_file(
         ORIG_DIR.mkdir(exist_ok=True)
         path.rename(ORIG_DIR / path.name)
         if verbose:
-            pass
+            print("  Moved original to originals/")
 
     if verbose:
-        pass
+        print(f"  ✓ Successfully converted to {out.name}")
 
     return True
 
@@ -129,6 +133,9 @@ def convert_directory(
     Returns:
         Tuple of (successful_count, failed_count)
     """
+    if verbose:
+        print(f"\nScanning directory: {root}")
+
     extensions = {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}
 
     if recursive:
@@ -137,16 +144,27 @@ def convert_directory(
         files = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() in extensions]
 
     if not files:
+        print("No video files found")
         return 0, 0
+
+    print(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
 
     success_count = 0
     fail_count = 0
 
-    for path in files:
+    for idx, path in enumerate(files, 1):
+        if verbose:
+            print(f"\nProcessing file {idx} of {len(files)}: {path.name}")
         if convert_file(path, output_dir, keep_original, verbose):
             success_count += 1
         else:
             fail_count += 1
+
+    # Print summary
+    print("\nConversion complete!")
+    print(f"Success: {success_count} file{'s' if success_count != 1 else ''}")
+    if fail_count > 0:
+        print(f"Failed: {fail_count} file{'s' if fail_count != 1 else ''}")
 
     return success_count, fail_count
 
@@ -202,24 +220,46 @@ Examples:
 
     args = parser.parse_args()
 
+    # Print welcome message
+    print("Media Converter v0.1.0")
+
+    if args.verbose:
+        print(f"Input: {args.path}")
+        if args.output:
+            print(f"Output: {args.output}")
+        else:
+            print("Output: (same as input)")
+        print(f"Recursive: {'Yes' if args.recursive else 'No'}")
+        print(f"Keep Original: {'Yes' if args.keep_original else 'No'}")
+
     # Create necessary directories
     LOG_DIR.mkdir(exist_ok=True)
     TMP_DIR.mkdir(exist_ok=True)
 
     # Check if path exists
     if not args.path.exists():
+        print(f"Error: Path does not exist: {args.path}")
         return 1
 
     # Process file or directory
     if args.path.is_file():
+        if args.verbose:
+            print(f"\nProcessing single file: {args.path.name}")
         success = convert_file(args.path, args.output, args.keep_original, args.verbose)
-        return 0 if success else 1
+        if success:
+            if not args.verbose:
+                print(f"✓ Successfully converted {args.path.name}")
+            return 0
+        print(f"✗ Failed to convert {args.path.name}")
+        return 1
     if args.path.is_dir():
         success_count, fail_count = convert_directory(
             args.path, args.recursive, args.output, args.keep_original, args.verbose
         )
 
         return 0 if fail_count == 0 else 1
+
+    print(f"Error: Invalid path: {args.path}")
     return 1
 
 
