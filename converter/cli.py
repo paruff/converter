@@ -6,11 +6,12 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, TMP_DIR
+from .config import DEFAULT_SD_BITRATE, LOG_DIR, MAX_WORKERS, ORIG_DIR, TMP_DIR
 from .encode import encode
 from .ffprobe_utils import probe
 from .file_classifier import classify_video
 from .logging_utils import get_file_logger, setup_logging
+from .parallel import ParallelEncoder
 from .repair import repair_mpeg, repair_wmv, repair_xvid
 from .smart_mode import smart_scale
 
@@ -184,6 +185,9 @@ def convert_directory(
     keep_original: bool = False,
     verbose: bool = False,
     dry_run: bool = False,
+    parallel: bool = True,
+    max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> tuple[int, int]:
     """Convert all video files in a directory.
 
@@ -194,6 +198,9 @@ def convert_directory(
         keep_original: If True, keep original files
         verbose: If True, print detailed progress
         dry_run: If True, perform dry run without actual conversion
+        parallel: If True, use parallel encoding (default: True)
+        max_workers: Number of parallel workers (default: from config)
+        show_progress: If True, show progress bars (default: True)
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -215,15 +222,38 @@ def convert_directory(
 
     logger.info(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
 
-    success_count = 0
-    fail_count = 0
+    # Use parallel encoding if enabled and more than 1 file
+    if parallel and len(files) > 1:
+        encoder = ParallelEncoder(
+            max_workers=max_workers, logger=logger, show_progress=show_progress
+        )
 
-    for idx, path in enumerate(files, 1):
-        logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
-        if convert_file(path, output_dir, keep_original, verbose, dry_run):
-            success_count += 1
-        else:
-            fail_count += 1
+        def convert_wrapper(path: Path) -> bool:
+            """Wrapper for convert_file to use with parallel encoder."""
+            return convert_file(path, output_dir, keep_original, verbose, dry_run)
+
+        def progress_callback(path: Path, success: bool) -> None:
+            """Callback to log progress."""
+            if success:
+                logger.info(f"✓ Completed: {path.name}")
+            else:
+                logger.error(f"✗ Failed: {path.name}")
+
+        success_count, fail_count = encoder.process_files(files, convert_wrapper, progress_callback)
+    else:
+        # Sequential processing
+        if not parallel:
+            logger.info("Parallel encoding disabled, using sequential processing")
+
+        success_count = 0
+        fail_count = 0
+
+        for idx, path in enumerate(files, 1):
+            logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
+            if convert_file(path, output_dir, keep_original, verbose, dry_run):
+                success_count += 1
+            else:
+                fail_count += 1
 
     # Print summary
     logger.info("Conversion complete!")
@@ -290,6 +320,26 @@ Examples:
         help="Dry run mode - show what would be done without executing",
     )
 
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel encoding (process files sequentially)",
+    )
+
+    parser.add_argument(
+        "-j",
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel workers (default: {MAX_WORKERS})",
+    )
+
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars",
+    )
+
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     args = parser.parse_args()
@@ -309,6 +359,11 @@ Examples:
         logger.debug("Output: (same as input)")
     logger.debug(f"Recursive: {'Yes' if args.recursive else 'No'}")
     logger.debug(f"Keep Original: {'Yes' if args.keep_original else 'No'}")
+    logger.debug(f"Parallel: {'No' if args.no_parallel else 'Yes'}")
+    if not args.no_parallel and args.workers:
+        logger.debug(f"Workers: {args.workers}")
+    elif not args.no_parallel:
+        logger.debug(f"Workers: {MAX_WORKERS} (default)")
 
     # Create necessary directories
     LOG_DIR.mkdir(exist_ok=True)
@@ -350,7 +405,15 @@ Examples:
             return 1
 
         success_count, fail_count = convert_directory(
-            args.path, args.recursive, args.output, args.keep_original, args.verbose, args.dry_run
+            args.path,
+            args.recursive,
+            args.output,
+            args.keep_original,
+            args.verbose,
+            args.dry_run,
+            parallel=not args.no_parallel,
+            max_workers=args.workers,
+            show_progress=not args.no_progress,
         )
 
         return 0 if fail_count == 0 else 1

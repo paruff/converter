@@ -83,7 +83,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install mypy
+        pip install mypy tqdm types-tqdm
     
     - name: Type check with mypy
       run: |

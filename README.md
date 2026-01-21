@@ -11,9 +11,13 @@ A robust, modular media conversion engine designed to repair, normalize, and enc
   - WMV packet resync
   - XviD packed B-frame unpacking
 - ✅ **Hardware encoding** (VideoToolbox) with libx264 fallback
+- ✅ **Parallel encoding** with configurable worker threads
+- ✅ **Progress bars** with tqdm for real-time feedback
 - ✅ **Command-line interface** with rich options
 - ✅ **Graphical user interface** using tkinter
 - ✅ **Docker support** for containerized conversion
+- ✅ **Homebrew formula** for easy installation on macOS
+- ✅ **macOS app bundle** packaging with PyInstaller
 - ✅ **Comprehensive test suite** with 39 tests and 61% coverage
 - ✅ **Clean directory structure**:
   - `logs/` - Log files
@@ -28,6 +32,8 @@ converter/
 ├── main.py               # Core conversion logic
 ├── cli.py                # Command-line interface
 ├── gui.py                # Graphical user interface
+├── parallel.py           # Parallel encoding with ThreadPoolExecutor
+├── progress.py           # Progress tracking with tqdm
 ├── ffprobe_utils.py      # FFprobe JSON parsing
 ├── file_classifier.py    # Codec classification
 ├── smart_mode.py         # Dynamic bitrate scaling
@@ -36,6 +42,8 @@ converter/
 ├── logging_utils.py      # Logging utilities
 ├── config.py             # Configuration
 ├── tests/                # Test suite (39 tests)
+├── homebrew/             # Homebrew formula
+├── scripts/              # Build and packaging scripts
 ├── Dockerfile            # Docker container
 ├── Makefile              # Build automation
 ├── pyproject.toml        # Package metadata
@@ -49,6 +57,19 @@ converter/
 - Optional: macOS for VideoToolbox hardware encoding
 
 ## Installation
+
+### From Homebrew (macOS)
+
+```bash
+# Install from Homebrew tap (when published)
+brew tap paruff/converter
+brew install media-converter
+
+# Or install directly from formula
+brew install homebrew/media-converter.rb
+```
+
+See [homebrew/INSTALLATION.md](homebrew/INSTALLATION.md) for detailed Homebrew installation instructions.
 
 ### From source
 
@@ -74,39 +95,72 @@ make docker-build
 docker build -t media-converter:latest .
 ```
 
+### As macOS App
+
+Download the `.dmg` installer from the releases page and drag the app to your Applications folder.
+
+Or build from source:
+
+```bash
+# Install packaging dependencies
+pip install -e ".[packaging]"
+
+# Build the app
+./scripts/build_macos.sh
+
+# Create DMG installer
+./scripts/create_dmg.sh
+```
+
+See [PACKAGING.md](PACKAGING.md) for detailed packaging instructions.
+
 ## Usage
 
 ### Command-Line Interface (CLI)
 
 ```bash
 # Convert all videos in current directory
-python cli.py
+converter
 
 # Convert specific file
-python cli.py video.avi
+converter video.avi
 
 # Convert directory with verbose output
-python cli.py /path/to/videos -v
+converter /path/to/videos -v
 
 # Recursive conversion with custom output directory
-python cli.py /path/to/videos -r -o /path/to/output
+converter /path/to/videos -r -o /path/to/output
 
 # Keep original files (don't move to originals/)
-python cli.py /path/to/videos --keep-original
+converter /path/to/videos --keep-original
+
+# Use parallel encoding with 8 workers
+converter /path/to/videos -j 8
+
+# Disable parallel encoding
+converter /path/to/videos --no-parallel
+
+# Disable progress bars
+converter /path/to/videos --no-progress
+
+# Dry run (see what would be done without executing)
+converter /path/to/videos --dry-run
 
 # Show help
-python cli.py --help
+converter --help
 ```
 
 ### Graphical User Interface (GUI)
 
 ```bash
 # Launch GUI
-python gui.py
+converter-gui
 ```
 
 The GUI provides:
 - File/folder browser
+- Parallel encoding with configurable worker count (1-16 threads)
+- Real-time progress bars showing current file and overall progress
 - Conversion progress tracking
 - Real-time log output
 - Success/failure statistics
@@ -126,17 +180,20 @@ docker run -it --rm -v /path/to/media:/media media-converter:latest bash
 
 ```python
 from pathlib import Path
-from cli import convert_file, convert_directory
+from converter.cli import convert_file, convert_directory
 
 # Convert a single file
 convert_file(Path("video.avi"), verbose=True)
 
-# Convert all videos in a directory
+# Convert all videos in a directory with parallel encoding
 success, failed = convert_directory(
     Path("/videos"),
     recursive=True,
     keep_original=False,
-    verbose=True
+    verbose=True,
+    parallel=True,
+    max_workers=4,
+    show_progress=True
 )
 ```
 
@@ -197,6 +254,17 @@ TMP_DIR = ROOT / "tmp_fix"     # Temporary repair directory
 ORIG_DIR = ROOT / "originals"  # Original files directory
 
 DEFAULT_SD_BITRATE = 1_200_000 # Default bitrate for SD content
+MAX_WORKERS = 4                # Default parallel worker count
+```
+
+Or use environment variables:
+
+```bash
+# Set max workers for parallel encoding
+export CONVERTER_MAX_WORKERS=8
+
+# Run with custom worker count
+converter /path/to/videos
 ```
 
 ## Supported Formats

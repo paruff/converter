@@ -12,6 +12,7 @@ from tkinter import (
     Frame,
     IntVar,
     Label,
+    Scale,
     Scrollbar,
     StringVar,
     Text,
@@ -22,7 +23,8 @@ from tkinter import (
 from tkinter.ttk import Progressbar
 
 from .cli import convert_file
-from .config import LOG_DIR, TMP_DIR
+from .config import LOG_DIR, MAX_WORKERS, TMP_DIR
+from .parallel import ParallelEncoder
 
 
 class MediaConverterGUI:
@@ -45,11 +47,15 @@ class MediaConverterGUI:
         self.recursive = BooleanVar(value=False)
         self.keep_original = BooleanVar(value=False)
         self.verbose = BooleanVar(value=True)
+        self.parallel = BooleanVar(value=True)
+        self.worker_count = IntVar(value=MAX_WORKERS)
         self.is_processing = False
 
         # Stats
         self.success_count = IntVar(value=0)
         self.fail_count = IntVar(value=0)
+        self.total_files = IntVar(value=0)
+        self.current_file = IntVar(value=0)
 
         self._build_ui()
 
@@ -117,6 +123,26 @@ class MediaConverterGUI:
             row=2, column=0, sticky="w", pady=2
         )
 
+        Checkbutton(options_frame, text="Enable parallel encoding", variable=self.parallel).grid(
+            row=3, column=0, sticky="w", pady=2
+        )
+
+        # Worker count slider
+        worker_frame = Frame(options_frame)
+        worker_frame.grid(row=4, column=0, sticky="w", pady=5)
+
+        Label(worker_frame, text="Worker threads:").pack(side="left", padx=(0, 5))
+        worker_scale = Scale(
+            worker_frame,
+            from_=1,
+            to=16,
+            orient="horizontal",
+            variable=self.worker_count,
+            length=200,
+        )
+        worker_scale.pack(side="left")
+        Label(worker_frame, textvariable=self.worker_count).pack(side="left", padx=(5, 0))
+
         # Control buttons
         button_frame = Frame(self.root, padx=20, pady=10)
         button_frame.pack(fill="x")
@@ -154,8 +180,13 @@ class MediaConverterGUI:
         progress_frame = Frame(self.root, padx=20, pady=5)
         progress_frame.pack(fill="x")
 
-        self.progress = Progressbar(progress_frame, mode="indeterminate")
-        self.progress.pack(fill="x")
+        Label(progress_frame, text="Overall Progress:").pack(anchor="w")
+        self.progress = Progressbar(progress_frame, mode="determinate")
+        self.progress.pack(fill="x", pady=2)
+
+        # Progress label
+        self.progress_label = Label(progress_frame, text="Ready", anchor="w")
+        self.progress_label.pack(fill="x")
 
         # Stats
         stats_frame = Frame(self.root, padx=20, pady=5)
@@ -225,6 +256,10 @@ class MediaConverterGUI:
         self.log_text.delete("1.0", "end")
         self.success_count.set(0)
         self.fail_count.set(0)
+        self.current_file.set(0)
+        self.total_files.set(0)
+        self.progress["value"] = 0
+        self.progress_label.config(text="Ready")
 
     def _start_conversion(self) -> None:
         """Start the conversion process."""
@@ -247,9 +282,11 @@ class MediaConverterGUI:
         # Reset stats
         self.success_count.set(0)
         self.fail_count.set(0)
+        self.current_file.set(0)
 
         # Start progress bar
-        self.progress.start(10)
+        self.progress["mode"] = "determinate"
+        self.progress["value"] = 0
 
         # Run conversion in separate thread
         thread = threading.Thread(target=self._run_conversion, daemon=True)
@@ -269,9 +306,16 @@ class MediaConverterGUI:
 
             if path.is_file():
                 # Single file
+                self.total_files.set(1)
+                self.progress["maximum"] = 1
+                self.progress_label.config(text=f"Processing: {path.name}")
+
                 success = convert_file(
                     path, output_dir, self.keep_original.get(), self.verbose.get()
                 )
+
+                self.current_file.set(1)
+                self.progress["value"] = 1
 
                 if success:
                     self.success_count.set(self.success_count.get() + 1)
@@ -295,29 +339,69 @@ class MediaConverterGUI:
                     self._log("No video files found!")
                 else:
                     self._log(f"Found {len(files)} video file(s)")
+                    self.total_files.set(len(files))
+                    self.progress["maximum"] = len(files)
 
-                    for file_path in files:
-                        if not self.is_processing:
-                            self._log("Conversion stopped by user")
-                            break
-
-                        self._log(f"\nProcessing: {file_path.name}")
-
-                        success = convert_file(
-                            file_path, output_dir, self.keep_original.get(), self.verbose.get()
+                    # Use parallel encoding if enabled and more than 1 file
+                    if self.parallel.get() and len(files) > 1:
+                        encoder = ParallelEncoder(
+                            max_workers=self.worker_count.get(), show_progress=False
                         )
 
-                        if success:
-                            self.success_count.set(self.success_count.get() + 1)
-                            self._log(f"✓ Completed: {file_path.name}")
-                        else:
-                            self.fail_count.set(self.fail_count.get() + 1)
-                            self._log(f"✗ Failed: {file_path.name}")
+                        def convert_wrapper(file_path: Path) -> bool:
+                            """Wrapper for convert_file."""
+                            return convert_file(
+                                file_path, output_dir, self.keep_original.get(), self.verbose.get()
+                            )
+
+                        def progress_callback(file_path: Path, success: bool) -> None:
+                            """Update progress after each file."""
+                            current = self.current_file.get() + 1
+                            self.current_file.set(current)
+                            self.progress["value"] = current
+                            self.progress_label.config(
+                                text=f"Processed {current}/{len(files)}: {file_path.name}"
+                            )
+
+                            if success:
+                                self.success_count.set(self.success_count.get() + 1)
+                                self._log(f"✓ Completed: {file_path.name}")
+                            else:
+                                self.fail_count.set(self.fail_count.get() + 1)
+                                self._log(f"✗ Failed: {file_path.name}")
+
+                        encoder.process_files(files, convert_wrapper, progress_callback)
+                    else:
+                        # Sequential processing
+                        for idx, file_path in enumerate(files, 1):
+                            if not self.is_processing:
+                                self._log("Conversion stopped by user")
+                                break
+
+                            self._log(f"\nProcessing: {file_path.name}")
+                            self.progress_label.config(
+                                text=f"Processing {idx}/{len(files)}: {file_path.name}"
+                            )
+
+                            success = convert_file(
+                                file_path, output_dir, self.keep_original.get(), self.verbose.get()
+                            )
+
+                            self.current_file.set(idx)
+                            self.progress["value"] = idx
+
+                            if success:
+                                self.success_count.set(self.success_count.get() + 1)
+                                self._log(f"✓ Completed: {file_path.name}")
+                            else:
+                                self.fail_count.set(self.fail_count.get() + 1)
+                                self._log(f"✗ Failed: {file_path.name}")
 
             self._log("=" * 60)
             self._log("Conversion complete!")
             self._log(f"Successful: {self.success_count.get()}")
             self._log(f"Failed: {self.fail_count.get()}")
+            self.progress_label.config(text="Complete!")
 
             # Show completion message
             if self.fail_count.get() == 0:
@@ -339,7 +423,6 @@ class MediaConverterGUI:
             # Re-enable buttons
             self.start_button.config(state="normal")
             self.stop_button.config(state="disabled")
-            self.progress.stop()
             self.is_processing = False
 
     def _stop_conversion(self) -> None:
