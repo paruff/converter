@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .config import TMP_DIR
 from .file_classifier import classify_video
@@ -252,9 +253,7 @@ class RepairDispatcher:
         """
         return codec_type in self._repair_map
 
-    def dispatch(
-        self, path: Path, video_stream: dict[str, Any], dry_run: bool = False
-    ) -> Path:
+    def dispatch(self, path: Path, video_stream: dict[str, Any], dry_run: bool = False) -> Path:
         """Dispatch to appropriate repair function based on codec.
 
         Args:

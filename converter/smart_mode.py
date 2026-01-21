@@ -33,9 +33,7 @@ class SmartMode:
         """
         return color_space == "bt470bg" or height <= 480
 
-    def calculate_scale_factor(
-        self, height: int, fps: float, color_space: str = ""
-    ) -> float:
+    def calculate_scale_factor(self, height: int, fps: float, color_space: str = "") -> float:
         """Calculate bitrate scale factor based on video properties.
 
         Args:
@@ -115,9 +113,7 @@ class SmartMode:
         )
         return fallback_bitrate
 
-    def scale_bitrate(
-        self, video_stream: dict[str, Any], base_bitrate: int
-    ) -> int:
+    def scale_bitrate(self, video_stream: dict[str, Any], base_bitrate: int) -> int:
         """Scale bitrate using smart mode heuristics.
 
         Args:
@@ -129,29 +125,29 @@ class SmartMode:
         """
         height = video_stream.get("height", 480)
         fps = video_stream.get("r_frame_rate", "30/1")
-        
+
         # Parse fps from fraction format (e.g., "30000/1001")
         if isinstance(fps, str) and "/" in fps:
             num, denom = fps.split("/")
             fps_float = float(num) / float(denom)
         else:
             fps_float = float(fps)
-        
+
         color_space = video_stream.get("color_space", "")
         codec_name = video_stream.get("codec_name", "")
 
         scale_factor = self.calculate_scale_factor(height, fps_float, color_space)
         codec_adjustment = self.get_codec_adjustment(codec_name)
-        
+
         final_scale = scale_factor * codec_adjustment
         scaled_bitrate = int(base_bitrate * final_scale)
-        
+
         self.logger.debug(
             f"Smart Mode: height={height}px, fps={fps_float:.2f}, "
             f"scale={scale_factor:.1f}, codec_adj={codec_adjustment:.1f}, "
             f"final_scale={final_scale:.2f}"
         )
-        
+
         return scaled_bitrate
 
 
@@ -169,6 +165,6 @@ def smart_scale(info: dict) -> float:
     height = video.get("height", 480)
     fps = video.get("fps", 30.0)
     color_space = video.get("color_space", "")
-    
+
     sm = SmartMode()
     return sm.calculate_scale_factor(height, fps, color_space)

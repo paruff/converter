@@ -13,9 +13,7 @@ class TestConvertFile:
     @patch("converter.main.encode")
     @patch("converter.main.ORIG_DIR")
     @patch("subprocess.run")
-    def test_convert_file_h264(
-        self, mock_subprocess, mock_orig_dir, mock_encode, mock_probe
-    ):
+    def test_convert_file_h264(self, mock_subprocess, mock_orig_dir, mock_encode, mock_probe):
         """Test converting H.264 file (repair via H.264-in-AVI)."""
         # Setup mocks
         mock_probe.return_value = {
@@ -48,9 +46,7 @@ class TestConvertFile:
     @patch("converter.main.encode")
     @patch("converter.main.ORIG_DIR")
     @patch("subprocess.run")
-    def test_convert_file_mpeg1(
-        self, mock_subprocess, mock_orig_dir, mock_encode, mock_probe
-    ):
+    def test_convert_file_mpeg1(self, mock_subprocess, mock_orig_dir, mock_encode, mock_probe):
         """Test converting MPEG-1 file (needs repair)."""
         # Setup mocks
         mock_probe.return_value = {

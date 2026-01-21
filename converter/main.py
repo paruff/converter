@@ -16,7 +16,7 @@ def convert_file(path: Path, dry_run: bool = False) -> None:
         dry_run: If True, skip actual conversion
     """
     logger = logging.getLogger("converter")
-    
+
     info = probe(path, dry_run=dry_run)
     if not info:
         return
@@ -30,7 +30,7 @@ def convert_file(path: Path, dry_run: bool = False) -> None:
 
     # Get base bitrate with fallback strategy
     base_bitrate = smart_mode.get_bitrate(video_stream, format_info)
-    
+
     # Scale bitrate using smart mode
     scaled_bitrate = smart_mode.scale_bitrate(video_stream, base_bitrate)
     target_kbps = int(scaled_bitrate / 1000)
