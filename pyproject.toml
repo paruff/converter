@@ -33,6 +33,7 @@ dev = [
     "black>=23.7.0",
     "ruff>=0.0.280",
     "mypy>=1.5.0",
+    "types-tqdm>=4.66.0",
 ]
 packaging = [
     "pyinstaller>=6.0.0",
