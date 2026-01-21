@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Media Converter specific
+logs/
+tmp_fix/
+originals/
+*.mkv
+*.avi
+*.mpg
+*.mpeg
+*.wmv
+*.mov
+*.mp4
