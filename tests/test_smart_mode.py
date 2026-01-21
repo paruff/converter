@@ -1,6 +1,6 @@
 """Tests for smart_mode module."""
 
-from smart_mode import smart_scale
+from converter.smart_mode import smart_scale
 
 
 class TestSmartScale:

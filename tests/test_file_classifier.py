@@ -1,6 +1,6 @@
 """Tests for file_classifier module."""
 
-from file_classifier import classify_video
+from converter.file_classifier import classify_video
 
 
 class TestClassifyVideo:

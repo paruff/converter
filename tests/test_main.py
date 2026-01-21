@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from main import convert_file, get_bitrate
+from converter.main import convert_file, get_bitrate
 
 
 class TestGetBitrate:

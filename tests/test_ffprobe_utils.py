@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ffprobe_utils import probe
+from converter.ffprobe_utils import probe
 
 
 class TestProbe:

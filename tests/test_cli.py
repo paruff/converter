@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from cli import main
+from converter.cli import main
 
 
 class TestCLIIntegration:
