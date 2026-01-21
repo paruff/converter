@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
-
 from converter.ffprobe_utils import probe
 
 
@@ -37,6 +35,8 @@ class TestProbe:
         """Test probe failure."""
         mock_result = Mock()
         mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Error"
 
         with patch("subprocess.run", return_value=mock_result):
             result = probe(Path("nonexistent.mp4"))
@@ -48,9 +48,10 @@ class TestProbe:
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = "invalid json"
+        mock_result.stderr = ""
 
-        with (
-            patch("subprocess.run", return_value=mock_result),
-            pytest.raises(json.JSONDecodeError),
-        ):
-            probe(Path("test.mp4"))
+        with patch("subprocess.run", return_value=mock_result):
+            result = probe(Path("test.mp4"))
+
+        # Should return None due to JSON parse error
+        assert result is None

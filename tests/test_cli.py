@@ -32,41 +32,43 @@ class TestCLIIntegration:
             assert result == 1
 
     @patch("converter.cli.convert_file")
-    @patch("converter.cli.Path")
-    def test_cli_single_file(self, mock_path, mock_convert):
+    def test_cli_single_file(self, mock_convert):
         """Test CLI with single file."""
-        # Mock path
-        mock_file = Mock()
-        mock_file.exists.return_value = True
-        mock_file.is_file.return_value = True
-        mock_file.is_dir.return_value = False
-        mock_path.return_value = mock_file
-
         # Mock convert_file to return success
         mock_convert.return_value = True
 
-        with patch.object(sys, "argv", ["cli.py", "test.avi"]):
-            result = main()
+        # Create a temp file for testing
+        with patch("converter.cli.Path") as mock_path_class:
+            mock_file = Mock()
+            mock_file.exists.return_value = True
+            mock_file.is_file.return_value = True
+            mock_file.is_dir.return_value = False
+            mock_file.suffix = ".avi"
+            mock_file.stat.return_value = Mock()
+            mock_path_class.return_value = mock_file
 
-        assert result == 0
-        mock_convert.assert_called_once()
+            with patch.object(sys, "argv", ["cli.py", "test.avi"]):
+                result = main()
+
+            assert result == 0
+            mock_convert.assert_called_once()
 
     @patch("converter.cli.convert_directory")
-    @patch("converter.cli.Path")
-    def test_cli_directory(self, mock_path, mock_convert_dir):
+    def test_cli_directory(self, mock_convert_dir):
         """Test CLI with directory."""
-        # Mock path
-        mock_dir = Mock()
-        mock_dir.exists.return_value = True
-        mock_dir.is_file.return_value = False
-        mock_dir.is_dir.return_value = True
-        mock_path.return_value = mock_dir
-
         # Mock convert_directory to return success
         mock_convert_dir.return_value = (5, 0)  # 5 success, 0 failures
 
-        with patch.object(sys, "argv", ["cli.py", "/test/dir"]):
-            result = main()
+        with patch("converter.cli.Path") as mock_path_class:
+            mock_dir = Mock()
+            mock_dir.exists.return_value = True
+            mock_dir.is_file.return_value = False
+            mock_dir.is_dir.return_value = True
+            mock_dir.iterdir.return_value = [Mock(is_file=lambda: True, suffix=".avi")]
+            mock_path_class.return_value = mock_dir
 
-        assert result == 0
-        mock_convert_dir.assert_called_once()
+            with patch.object(sys, "argv", ["cli.py", "/test/dir"]):
+                result = main()
+
+            assert result == 0
+            mock_convert_dir.assert_called_once()

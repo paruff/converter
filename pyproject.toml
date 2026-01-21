@@ -54,7 +54,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "PIE", "SIM", "RET"]
-ignore = ["E501", "T201"]  # Line too long (handled by black), print statements (CLI app)
+ignore = ["E501", "T201", "DTZ005"]  # Line too long (handled by black), print statements (CLI app), local datetime for log filenames
 
 [tool.mypy]
 python_version = "3.10"
