@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from converter.encode import encode
 
 
@@ -44,3 +46,10 @@ class TestEncode:
         args = mock_run.call_args[0][0]
         assert "libx264" in args
         assert "2000k" in args
+
+    def test_encode_rejects_identical_paths(self):
+        """Test that encode raises ValueError for identical input/output paths."""
+        same_path = Path("/test/video.mkv")
+
+        with pytest.raises(ValueError, match="Input and output paths must differ"):
+            encode(same_path, same_path, 2000)

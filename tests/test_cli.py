@@ -1,11 +1,12 @@
 """Integration tests for CLI module."""
 
 import sys
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
-from converter.cli import main
+from converter.cli import convert_file, main
 
 
 class TestCLIIntegration:
@@ -72,3 +73,87 @@ class TestCLIIntegration:
 
             assert result == 0
             mock_convert_dir.assert_called_once()
+
+
+class TestNoInplaceOverwrite:
+    """Test that convert_file avoids in-place overwrites."""
+
+    @patch("converter.cli.encode")
+    @patch("converter.cli.probe")
+    @patch("converter.cli.get_file_logger")
+    def test_no_inplace_overwrite_mkv(self, mock_logger, mock_probe, mock_encode):
+        """Test that .mkv input produces _converted.mkv output."""
+        # Setup mocks
+        mock_probe.return_value = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "bit_rate": "2000000",
+                    "height": 720,
+                }
+            ]
+        }
+        mock_logger.return_value = Mock()
+
+        # Create a mock .mkv file path
+        input_path = Path("/test/video.mkv")
+
+        mock_stat = Mock()
+        mock_stat.st_mode = 0o100644  # Regular file
+        mock_stat.st_size = 1024
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(Path, "stat", return_value=mock_stat),
+        ):
+            convert_file(input_path, dry_run=True)
+
+        # Verify encode was called with different paths
+        mock_encode.assert_called_once()
+        args = mock_encode.call_args[0]
+        output_arg = args[1]
+
+        # Output should be video_converted.mkv, not video.mkv
+        assert output_arg.name == "video_converted.mkv"
+        assert output_arg != input_path
+
+    @patch("converter.cli.encode")
+    @patch("converter.cli.probe")
+    @patch("converter.cli.get_file_logger")
+    def test_no_inplace_overwrite_avi(self, mock_logger, mock_probe, mock_encode):
+        """Test that .avi input produces .mkv output (different files)."""
+        # Setup mocks
+        mock_probe.return_value = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "bit_rate": "2000000",
+                    "height": 720,
+                }
+            ]
+        }
+        mock_logger.return_value = Mock()
+
+        # Create a mock .avi file path
+        input_path = Path("/test/video.avi")
+
+        mock_stat = Mock()
+        mock_stat.st_mode = 0o100644  # Regular file
+        mock_stat.st_size = 1024
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(Path, "stat", return_value=mock_stat),
+        ):
+            convert_file(input_path, dry_run=True)
+
+        # Verify encode was called with different paths
+        mock_encode.assert_called_once()
+        args = mock_encode.call_args[0]
+        output_arg = args[1]
+
+        # Output should be video.mkv, different from video.avi
+        assert output_arg.name == "video.mkv"
+        assert output_arg != input_path

@@ -12,8 +12,15 @@ def encode(path: Path, target: Path, bitrate_kbps: int, dry_run: bool = False) -
         target: Output video path
         bitrate_kbps: Target bitrate in kbps
         dry_run: If True, skip actual encoding
+
+    Raises:
+        ValueError: If input and output paths are identical
     """
     logger = logging.getLogger("converter")
+
+    # Guard against identical input/output paths
+    if path.resolve() == target.resolve():
+        raise ValueError("Input and output paths must differ.")
 
     if dry_run:
         logger.info(f"[DRY-RUN] Would encode {path} to {target} at {bitrate_kbps}kbps")
