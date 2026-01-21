@@ -202,4 +202,3 @@ class TestCrossDeviceMove:
         # shutil.move should be called with string paths
         assert call_args[0] == str(input_path)
         assert "originals" in call_args[1]
-
