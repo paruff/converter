@@ -34,3 +34,30 @@ When generating code, Copilot should:
    - Keep logic deterministic
    - Avoid magic numbers without comments
 10. When adding repair pipelines
+ - Never overwrite originals
+ - - Always write to `tmp_fix/`
+   - - Always return a valid Path
+
+## Copilot Should Avoid 
+- Generating monolithic scripts
+- - Using `os.system`
+- Using string-based command concatenation
+- Adding features without docstrings
+- Introducing global state unless in `config.py`
+- Hardcoding paths
+## Documentation Expectations Copilot should: 
+- Generate docstrings for all public functions
+- Update README when adding features
+- Suggest improvements to architecture when appropriate
+
+## Testing Expectations Copilot should: 
+- Generate pytest-compatible tests
+-  Mock subprocess calls where possible
+- Validate ffprobe parsing logic
+- Validate Smart Mode scaling logic
+
+## Style Expectations 
+- Follow PEP8
+- Use `black` formatting
+- Use `ruff` for linting
+- Use `mypy` for type checking
