@@ -20,37 +20,37 @@ SUPPORTED_EXTENSIONS = {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}
 
 def validate_path(path: Path) -> str | None:
     """Validate input path.
-    
+
     Args:
         path: Path to validate
-        
+
     Returns:
         Error message if invalid, None if valid
     """
     if not path.exists():
         return f"Path does not exist: {path}"
-    
+
     if not path.is_file() and not path.is_dir():
         return f"Path is neither a file nor directory: {path}"
-    
+
     if path.is_file():
         # Check if file is readable
         try:
             path.stat()
         except PermissionError:
             return f"File is not readable: {path}"
-        
+
         # Check if supported extension
         if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
             return f"Unsupported file type: {path.suffix} (supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))})"
-    
+
     elif path.is_dir():
         # Check if directory is readable
         try:
             list(path.iterdir())
         except PermissionError:
             return f"Directory is not readable: {path}"
-    
+
     return None
 
 
@@ -83,30 +83,30 @@ def convert_file(
     """
     logger = logging.getLogger("converter")
     file_logger = get_file_logger(path)
-    
+
     file_logger.info(f"Starting conversion: {path}")
-    
+
     # Validate file
     if not path.exists():
         logger.error(f"File does not exist: {path}")
         return False
-    
+
     if not path.is_file():
         logger.error(f"Path is not a file: {path}")
         return False
-    
+
     # Check if readable
     try:
         path.stat()
     except PermissionError:
         logger.error(f"File is not readable: {path}")
         return False
-    
+
     # Check extension
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         logger.error(f"Unsupported file type: {path.suffix}")
         return False
-    
+
     logger.debug(f"Probing file: {path.name}")
 
     # Probe file
@@ -168,9 +168,9 @@ def convert_file(
     if not dry_run and not keep_original:
         ORIG_DIR.mkdir(exist_ok=True)
         path.rename(ORIG_DIR / path.name)
-        logger.info(f"Moved original to originals/")
+        logger.info("Moved original to originals/")
     elif dry_run and not keep_original:
-        logger.info(f"[DRY-RUN] Would move original to originals/")
+        logger.info("[DRY-RUN] Would move original to originals/")
 
     logger.info(f"✓ Successfully converted to {out.name}")
 
@@ -199,13 +199,15 @@ def convert_directory(
         Tuple of (successful_count, failed_count)
     """
     logger = logging.getLogger("converter")
-    
+
     logger.info(f"Scanning directory: {root}")
 
     if recursive:
         files = [p for p in root.rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS]
     else:
-        files = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
+        files = [
+            p for p in root.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+        ]
 
     if not files:
         logger.warning("No video files found")
@@ -281,11 +283,11 @@ Examples:
     )
 
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    
+
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Dry run mode - show what would be done without executing"
+        help="Dry run mode - show what would be done without executing",
     )
 
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
@@ -294,9 +296,9 @@ Examples:
 
     # Setup logging
     logger = setup_logging(verbose=args.verbose)
-    
+
     logger.info("Media Converter v0.1.0")
-    
+
     if args.dry_run:
         logger.info("DRY-RUN MODE ENABLED - No files will be modified")
 
@@ -323,21 +325,21 @@ Examples:
     if args.path.is_file():
         logger.info(f"Processing single file: {args.path.name}")
         success = convert_file(
-            args.path, 
-            args.output, 
-            args.keep_original, 
-            args.verbose,
-            args.dry_run
+            args.path, args.output, args.keep_original, args.verbose, args.dry_run
         )
         if success:
             return 0
         logger.error(f"✗ Failed to convert {args.path.name}")
         return 1
-    
+
     if args.path.is_dir():
         # Check if directory is empty
         try:
-            files = [p for p in args.path.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
+            files = [
+                p
+                for p in args.path.iterdir()
+                if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+            ]
             if not files and not args.recursive:
                 logger.warning(f"No supported video files found in {args.path}")
                 logger.info(f"Supported extensions: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
@@ -346,14 +348,9 @@ Examples:
         except PermissionError:
             logger.error(f"Cannot read directory: {args.path}")
             return 1
-        
+
         success_count, fail_count = convert_directory(
-            args.path, 
-            args.recursive, 
-            args.output, 
-            args.keep_original, 
-            args.verbose,
-            args.dry_run
+            args.path, args.recursive, args.output, args.keep_original, args.verbose, args.dry_run
         )
 
         return 0 if fail_count == 0 else 1
