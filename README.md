@@ -6,6 +6,8 @@ A robust, modular media conversion engine designed to repair, normalize, and enc
 
 - ✅ **Automatic codec detection** (H.264, MPEG-1, MPEG-2, WMV3, XviD)
 - ✅ **Smart Mode dynamic bitrate scaling** for optimal quality
+  - Content-aware bitrate adjustments for black & white shows
+  - Low-complexity content detection (comedies, documentaries)
 - ✅ **Pre-repair pipelines** for:
   - MPEG-1 timestamp and GOP repair
   - WMV packet resync
@@ -283,9 +285,42 @@ converter /path/to/videos
 1. **Probe** - Analyze video using ffprobe
 2. **Classify** - Detect codec type
 3. **Repair** - Apply codec-specific repairs if needed
-4. **Scale** - Calculate optimal bitrate using Smart Mode
+4. **Scale** - Calculate optimal bitrate using Smart Mode with content-aware adjustments
 5. **Encode** - Convert to H.264/AAC in MKV container
 6. **Archive** - Move original to `originals/` directory
+
+### Content-Aware Bitrate Scaling
+
+Smart Mode now includes intelligent content detection to optimize bitrate:
+
+**Black & White Content Detection:**
+- Automatically detects grayscale pixel formats (gray, gray8, gray16, etc.)
+- Applies 25% bitrate reduction (0.75x multiplier)
+- Saves space without sacrificing quality on monochrome content
+
+**Low-Complexity Content Detection:**
+- Identifies content with low motion or simple scenes
+- Uses bitrate-per-pixel analysis (< 0.08 bits/pixel/second threshold)
+- Detects very low frame rates (< 24 fps)
+- Applies 15% bitrate reduction (0.85x multiplier)
+- Ideal for:
+  - Comedies with static camera setups
+  - Documentaries with talking heads
+  - Presentations and screencasts
+  - Limited animation cartoons
+
+**Combined Adjustments:**
+- B&W + Low-complexity content: 35% reduction (0.65x multiplier)
+- Normal color + complex content: No adjustment (1.0x multiplier)
+
+Example bitrate calculations:
+```
+SD B&W Documentary (480p, gray, low-complexity):
+  Base: 1.2 Mbps → Scaled: 1.2 × 1.2 × 0.65 = 936 kbps
+
+HD Color Action (1080p, 30fps, high-complexity):
+  Base: 5 Mbps → Scaled: 5 × 1.7 × 1.0 = 8.5 Mbps
+```
 
 ## Contributing
 

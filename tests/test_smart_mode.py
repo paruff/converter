@@ -67,7 +67,7 @@ class TestSmartModeClass:
         assert sm.scale_bitrate(stream, 1_200_000) == 1_440_000
 
     def test_scale_bitrate_with_fraction_fps(self):
-        """Test bitrate scaling with fractional FPS."""
+        """Test bitrate scaling with fractional FPS (no width, so no content adjustment)."""
         sm = SmartMode()
         stream = {
             "height": 1080,
@@ -75,7 +75,7 @@ class TestSmartModeClass:
             "color_space": "",
             "codec_name": "h264",
         }
-        # 1200000 * 1.7 = 2040000
+        # Without width, no content adjustment: 1200000 * 1.7 = 2040000
         assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
 
     def test_scale_bitrate_with_defaults(self):
@@ -194,28 +194,44 @@ class TestSmartModeEdgeCases:
     def test_scale_bitrate_very_low_fps(self):
         """Test bitrate scaling with very low FPS (e.g., stop motion)."""
         sm = SmartMode()
-        stream = {"height": 1080, "r_frame_rate": "12/1", "color_space": "", "codec_name": "h264"}
-        # Low FPS: 1200000 * 1.3 = 1560000
-        assert sm.scale_bitrate(stream, 1_200_000) == 1_560_000
+        stream = {
+            "height": 1080,
+            "width": 1920,
+            "r_frame_rate": "12/1",
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # Low FPS (< 24) triggers low-complexity: 1200000 * 1.3 * 0.85 = 1326000
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_326_000
 
     def test_scale_bitrate_very_high_fps(self):
         """Test bitrate scaling with very high FPS (e.g., 60fps)."""
         sm = SmartMode()
-        stream = {"height": 1080, "r_frame_rate": "60/1", "color_space": "", "codec_name": "h264"}
-        # High FPS: 1200000 * 1.7 = 2040000
-        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+        stream = {
+            "height": 1080,
+            "width": 1920,
+            "r_frame_rate": "60/1",
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # 1920x1080@60 with 1.2Mbps = 0.010 bpp/s (low complexity)
+        # 1200000 * 1.7 * 0.85 = 1733999
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_733_999
 
     def test_scale_bitrate_ntsc_fps(self):
         """Test bitrate scaling with NTSC fractional FPS (29.97)."""
         sm = SmartMode()
         stream = {
             "height": 720,
+            "width": 1280,
             "r_frame_rate": "30000/1001",  # 29.97 fps
             "color_space": "",
             "codec_name": "h264",
         }
-        # 29.97 >= 29.5, so scale = 1.7
-        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+        # 1280x720@29.97 with 1.2Mbps = 0.043 bpp/s (< 0.08, low complexity)
+        # 29.97 >= 29.5, so scale = 1.7, content = 0.85
+        # 1200000 * 1.7 * 0.85 = 1733999
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_733_999
 
     def test_scale_bitrate_pal_fps(self):
         """Test bitrate scaling with PAL FPS (25)."""
@@ -229,12 +245,14 @@ class TestSmartModeEdgeCases:
         sm = SmartMode()
         stream = {
             "height": 1080,
+            "width": 1920,
             "r_frame_rate": "24000/1001",  # 23.976 fps
             "color_space": "",
             "codec_name": "h264",
         }
-        # < 25 fps, scale = 1.3
-        assert sm.scale_bitrate(stream, 1_200_000) == 1_560_000
+        # < 24 fps triggers low complexity, scale = 1.3, content = 0.85
+        # 1200000 * 1.3 * 0.85 = 1326000
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_326_000
 
     def test_get_bitrate_fallback_4k(self):
         """Test fallback bitrate for 4K resolution."""
@@ -278,14 +296,15 @@ class TestSmartModeEdgeCases:
         assert result == 1_440_000
 
     def test_scale_bitrate_with_integer_fps(self):
-        """Test bitrate scaling when FPS is already an integer."""
+        """Test bitrate scaling when FPS is already an integer (no width, no content adjustment)."""
         sm = SmartMode()
         stream = {"height": 1080, "r_frame_rate": 30, "color_space": "", "codec_name": "h264"}
-        # FPS 30 >= 29.5, scale = 1.7
+        # FPS 30 >= 29.5, scale = 1.7, no content adjustment without width
+        # 1200000 * 1.7 = 2040000
         assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
 
     def test_scale_bitrate_with_float_fps(self):
-        """Test bitrate scaling when FPS is a float."""
+        """Test bitrate scaling when FPS is a float (no width, no content adjustment)."""
         sm = SmartMode()
         stream = {
             "height": 1080,
@@ -293,7 +312,8 @@ class TestSmartModeEdgeCases:
             "color_space": "",
             "codec_name": "h264",
         }
-        # FPS 29.97 >= 29.5, scale = 1.7
+        # FPS 29.97 >= 29.5, scale = 1.7, no content adjustment without width
+        # 1200000 * 1.7 = 2040000
         assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
 
     def test_sd_with_bt470bg_overrides_height(self):
@@ -335,3 +355,243 @@ class TestSmartModeEdgeCases:
         assert sm.get_codec_adjustment("mpeg1video") == 1.0
         assert sm.get_codec_adjustment("vp9") == 1.0
         assert sm.get_codec_adjustment("av1") == 1.0
+
+
+class TestContentAwareScaling:
+    """Tests for content-aware bitrate scaling."""
+
+    def test_is_black_and_white_gray(self):
+        """Test B&W detection with gray pixel format."""
+        sm = SmartMode()
+        stream = {"pix_fmt": "gray"}
+        assert sm.is_black_and_white(stream) is True
+
+    def test_is_black_and_white_gray8(self):
+        """Test B&W detection with gray8 pixel format."""
+        sm = SmartMode()
+        stream = {"pix_fmt": "gray8"}
+        assert sm.is_black_and_white(stream) is True
+
+    def test_is_black_and_white_gray16(self):
+        """Test B&W detection with gray16 pixel format."""
+        sm = SmartMode()
+        stream = {"pix_fmt": "gray16"}
+        assert sm.is_black_and_white(stream) is True
+
+    def test_is_not_black_and_white_yuv420p(self):
+        """Test that color formats are not detected as B&W."""
+        sm = SmartMode()
+        stream = {"pix_fmt": "yuv420p"}
+        assert sm.is_black_and_white(stream) is False
+
+    def test_is_not_black_and_white_yuvj420p(self):
+        """Test that JPEG color formats are not detected as B&W."""
+        sm = SmartMode()
+        stream = {"pix_fmt": "yuvj420p"}
+        assert sm.is_black_and_white(stream) is False
+
+    def test_is_not_black_and_white_missing(self):
+        """Test that missing pixel format is not detected as B&W."""
+        sm = SmartMode()
+        stream = {}
+        assert sm.is_black_and_white(stream) is False
+
+    def test_is_low_complexity_by_bitrate(self):
+        """Test low-complexity detection via low bitrate per pixel."""
+        sm = SmartMode()
+        # 640x480@30fps with 700kbps = 0.0763 bpp/s (< 0.08 threshold)
+        stream = {
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 700_000  # 700 kbps
+        assert sm.is_low_complexity(stream, base_bitrate) is True
+
+    def test_is_low_complexity_by_low_fps(self):
+        """Test low-complexity detection via very low fps."""
+        sm = SmartMode()
+        # 720p at 20fps (very low fps, typical for some documentaries)
+        stream = {
+            "height": 720,
+            "width": 1280,
+            "r_frame_rate": "20/1",
+        }
+        base_bitrate = 1_400_000  # 1.4 Mbps = 0.076 bpp/s
+        assert sm.is_low_complexity(stream, base_bitrate) is True
+
+    def test_is_not_low_complexity_high_bitrate(self):
+        """Test that high bitrate content is not detected as low-complexity."""
+        sm = SmartMode()
+        # 640x480@30fps with 1.2Mbps = 0.13 bpp/s (> 0.1 threshold)
+        stream = {
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 1_200_000  # 1.2 Mbps
+        assert sm.is_low_complexity(stream, base_bitrate) is False
+
+    def test_is_not_low_complexity_high_fps(self):
+        """Test that high fps with adequate bitrate prevents low-complexity detection."""
+        sm = SmartMode()
+        # 720p at 30fps with adequate bitrate
+        stream = {
+            "height": 720,
+            "width": 1280,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 3_000_000  # 3 Mbps = 0.108 bpp/s (> 0.08 threshold)
+        assert sm.is_low_complexity(stream, base_bitrate) is False
+
+    def test_is_low_complexity_with_fractional_fps(self):
+        """Test low-complexity detection with very low fractional fps."""
+        sm = SmartMode()
+        # 720p at 20fps (very low)
+        stream = {
+            "height": 720,
+            "width": 1280,
+            "r_frame_rate": "20000/1001",  # ~20 fps
+        }
+        base_bitrate = 1_400_000  # 1.4 Mbps = 0.076 bpp/s
+        assert sm.is_low_complexity(stream, base_bitrate) is True
+
+    def test_get_content_adjustment_bw_only(self):
+        """Test content adjustment for B&W content only."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "gray",
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 1_200_000
+        assert sm.get_content_adjustment(stream, base_bitrate) == 0.75
+
+    def test_get_content_adjustment_low_complexity_only(self):
+        """Test content adjustment for low-complexity content only."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "yuv420p",
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 700_000  # Low bitrate triggers low-complexity (0.076 bpp/s)
+        assert sm.get_content_adjustment(stream, base_bitrate) == 0.85
+
+    def test_get_content_adjustment_both(self):
+        """Test content adjustment for B&W + low-complexity."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "gray",
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 700_000  # Low bitrate + B&W
+        assert sm.get_content_adjustment(stream, base_bitrate) == 0.65
+
+    def test_get_content_adjustment_none(self):
+        """Test content adjustment for normal content with adequate bitrate."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "yuv420p",
+            "height": 1080,
+            "width": 1920,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 8_000_000  # High bitrate: 0.129 bpp/s (> 0.08 threshold)
+        assert sm.get_content_adjustment(stream, base_bitrate) == 1.0
+
+    def test_scale_bitrate_with_bw_content(self):
+        """Test bitrate scaling with B&W content."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "gray",
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+            "color_space": "bt470bg",
+            "codec_name": "h264",
+        }
+        # SD + B&W: 1200000 * 1.2 * 0.75 = 1080000
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_080_000
+
+    def test_scale_bitrate_with_low_complexity_content(self):
+        """Test bitrate scaling with low-complexity content."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "yuv420p",
+            "height": 720,
+            "width": 1280,
+            "r_frame_rate": "24/1",
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # Low FPS (24) -> scale=1.3, low-complexity -> 0.85
+        # 1200000 * 1.3 * 0.85 = 1326000
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_326_000
+
+    def test_scale_bitrate_with_bw_and_low_complexity(self):
+        """Test bitrate scaling with B&W + low-complexity content."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "gray",
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "30/1",
+            "color_space": "bt470bg",
+            "codec_name": "h264",
+        }
+        base_bitrate = 700_000  # Low enough to trigger low-complexity (0.076 bpp/s)
+        # SD + B&W + low-complexity: 700000 * 1.2 * 0.65 = 546000
+        assert sm.scale_bitrate(stream, base_bitrate) == 546_000
+
+    def test_scale_bitrate_normal_content_unchanged(self):
+        """Test that normal content scaling is not affected."""
+        sm = SmartMode()
+        stream = {
+            "pix_fmt": "yuv420p",
+            "height": 1080,
+            "width": 1920,
+            "r_frame_rate": "30/1",
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        base_bitrate = 8_000_000  # High bitrate: 0.129 bpp/s (> 0.08 threshold)
+        # High FPS (30) -> scale=1.7, normal content -> 1.0
+        # 8000000 * 1.7 * 1.0 = 13600000
+        assert sm.scale_bitrate(stream, base_bitrate) == 13_600_000
+
+    def test_is_low_complexity_missing_dimensions(self):
+        """Test low-complexity detection with missing width/height."""
+        sm = SmartMode()
+        stream = {"r_frame_rate": "12/1"}  # Very low fps (< 24)
+        base_bitrate = 1_000_000
+        # Should detect low fps and return True
+        assert sm.is_low_complexity(stream, base_bitrate) is True
+
+    def test_is_low_complexity_zero_pixels(self):
+        """Test low-complexity detection with invalid dimensions."""
+        sm = SmartMode()
+        stream = {
+            "height": 0,
+            "width": 0,
+            "r_frame_rate": "30/1",
+        }
+        base_bitrate = 1_000_000
+        # Should not crash and return False (no valid calculation possible)
+        assert sm.is_low_complexity(stream, base_bitrate) is False
+
+    def test_is_low_complexity_zero_fps(self):
+        """Test low-complexity detection with zero fps."""
+        sm = SmartMode()
+        stream = {
+            "height": 480,
+            "width": 640,
+            "r_frame_rate": "0/1",
+        }
+        base_bitrate = 1_000_000
+        # Should not crash and return False
+        assert sm.is_low_complexity(stream, base_bitrate) is False

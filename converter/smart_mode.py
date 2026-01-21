@@ -11,6 +11,7 @@ class SmartMode:
     - Bitrate scaling based on video properties
     - SD/HD classification heuristics
     - Codec-aware adjustments
+    - Content-aware adjustments (black & white, low-complexity)
     """
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
@@ -63,6 +64,128 @@ class SmartMode:
         """
         # Future enhancement: codec-specific adjustments
         # For now, return neutral adjustment
+        return 1.0
+
+    def is_black_and_white(self, video_stream: dict[str, Any]) -> bool:
+        """Detect if video is black & white.
+
+        Black & white detection uses pixel format indicators:
+        - gray, gray8, gray16: Grayscale formats (definite B&W)
+        - yuv420p, yuvj420p with no chroma data indicators
+
+        Args:
+            video_stream: Video stream metadata from ffprobe
+
+        Returns:
+            True if video appears to be black & white
+        """
+        pix_fmt = video_stream.get("pix_fmt", "")
+
+        # Definite black & white pixel formats
+        bw_formats = {"gray", "gray8", "gray16", "gray8a", "gray16be", "gray16le"}
+        if pix_fmt in bw_formats:
+            self.logger.debug(f"Detected B&W content via pixel format: {pix_fmt}")
+            return True
+
+        return False
+
+    def is_low_complexity(self, video_stream: dict[str, Any], base_bitrate: int) -> bool:
+        """Detect if video is low-complexity content.
+
+        Low-complexity content includes:
+        - Comedies (often static camera, simple sets)
+        - Documentaries (talking heads, minimal motion)
+        - Cartoons (limited animation)
+
+        Detection heuristics:
+        - Low bitrate relative to resolution (< 0.08 bits per pixel per second)
+        - Very low frame rates (< 24 fps) combined with moderate resolution
+
+        Args:
+            video_stream: Video stream metadata from ffprobe
+            base_bitrate: Base bitrate in bits per second
+
+        Returns:
+            True if video appears to be low-complexity
+        """
+        height = video_stream.get("height")
+        width = video_stream.get("width")
+        fps = video_stream.get("r_frame_rate", "30/1")
+
+        # Need both width and height for bitrate per pixel calculation
+        if width is None or height is None:
+            # Fall back to fps-only heuristic
+            if isinstance(fps, str) and "/" in fps:
+                num, denom = fps.split("/")
+                fps_float = float(num) / float(denom) if float(denom) != 0 else 0
+            else:
+                fps_float = float(fps) if fps else 0
+
+            # Only very low fps (< 24) indicates low complexity without bitrate data
+            if fps_float > 0 and fps_float < 24:
+                self.logger.debug(
+                    f"Detected low-complexity content: very low fps ({fps_float:.2f})"
+                )
+                return True
+            return False
+
+        # Parse fps from fraction format
+        if isinstance(fps, str) and "/" in fps:
+            num, denom = fps.split("/")
+            fps_float = float(num) / float(denom) if float(denom) != 0 else 0
+        else:
+            fps_float = float(fps) if fps else 0
+
+        # Ignore invalid or zero fps
+        if fps_float <= 0:
+            return False
+
+        # Calculate bits per pixel per second
+        pixels = width * height
+        if pixels > 0:
+            bits_per_pixel_per_second = base_bitrate / (pixels * fps_float)
+
+            # Low complexity threshold: < 0.08 bits per pixel per second
+            # Example: 640x480@30fps with 700kbps = 0.076 bpp/s (low complexity)
+            #          1920x1080@30fps with 5Mbps = 0.080 bpp/s (borderline)
+            if bits_per_pixel_per_second < 0.08:
+                self.logger.debug(
+                    f"Detected low-complexity content: "
+                    f"{bits_per_pixel_per_second:.3f} bits/pixel/sec "
+                    f"(threshold: 0.08)"
+                )
+                return True
+
+        return False
+
+    def get_content_adjustment(self, video_stream: dict[str, Any], base_bitrate: int) -> float:
+        """Get content-aware bitrate adjustment factor.
+
+        Applies reductions for:
+        - Black & white content: 0.75x (25% reduction)
+        - Low-complexity content: 0.85x (15% reduction)
+        - Both B&W and low-complexity: 0.65x (35% reduction combined)
+
+        Args:
+            video_stream: Video stream metadata from ffprobe
+            base_bitrate: Base bitrate in bits per second
+
+        Returns:
+            Adjustment factor (< 1.0 = reduction, 1.0 = no adjustment)
+        """
+        is_bw = self.is_black_and_white(video_stream)
+        is_low_comp = self.is_low_complexity(video_stream, base_bitrate)
+
+        if is_bw and is_low_comp:
+            self.logger.info("Content: B&W + Low-complexity → 0.65x bitrate")
+            return 0.65
+        elif is_bw:
+            self.logger.info("Content: Black & White → 0.75x bitrate")
+            return 0.75
+        elif is_low_comp:
+            self.logger.info("Content: Low-complexity → 0.85x bitrate")
+            return 0.85
+
         return 1.0
 
     def get_bitrate(
@@ -138,14 +261,15 @@ class SmartMode:
 
         scale_factor = self.calculate_scale_factor(height, fps_float, color_space)
         codec_adjustment = self.get_codec_adjustment(codec_name)
+        content_adjustment = self.get_content_adjustment(video_stream, base_bitrate)
 
-        final_scale = scale_factor * codec_adjustment
+        final_scale = scale_factor * codec_adjustment * content_adjustment
         scaled_bitrate = int(base_bitrate * final_scale)
 
         self.logger.debug(
             f"Smart Mode: height={height}px, fps={fps_float:.2f}, "
             f"scale={scale_factor:.1f}, codec_adj={codec_adjustment:.1f}, "
-            f"final_scale={final_scale:.2f}"
+            f"content_adj={content_adjustment:.2f}, final_scale={final_scale:.2f}"
         )
 
         return scaled_bitrate
