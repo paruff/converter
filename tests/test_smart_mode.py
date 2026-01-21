@@ -160,3 +160,178 @@ class TestSmartScaleLegacy:
         """Test scaling with missing color space."""
         info = {"video": {"height": 720, "fps": 29.97}}
         assert smart_scale(info) == 1.7
+
+
+class TestSmartModeEdgeCases:
+    """Tests for Smart Mode edge cases and boundary conditions."""
+
+    def test_is_sd_boundary_480(self):
+        """Test SD detection at 480p boundary."""
+        sm = SmartMode()
+        assert sm.is_sd(480, "") is True
+        assert sm.is_sd(481, "") is False
+
+    def test_is_sd_hd_boundary(self):
+        """Test SD/HD boundary - SD is only up to 480p."""
+        sm = SmartMode()
+        # 480 and below are SD
+        assert sm.is_sd(480, "") is True
+        # Above 480 is not SD (even if below 720)
+        assert sm.is_sd(481, "") is False
+        assert sm.is_sd(719, "") is False
+        assert sm.is_sd(720, "") is False
+
+    def test_calculate_scale_factor_fps_boundaries(self):
+        """Test scale factor at FPS boundaries."""
+        sm = SmartMode()
+        # Low FPS boundary (< 25)
+        assert sm.calculate_scale_factor(720, 24.9, "") == 1.3
+        assert sm.calculate_scale_factor(720, 25.0, "") == 1.5
+        # High FPS boundary (>= 29.5)
+        assert sm.calculate_scale_factor(720, 29.4, "") == 1.5
+        assert sm.calculate_scale_factor(720, 29.5, "") == 1.7
+
+    def test_scale_bitrate_very_low_fps(self):
+        """Test bitrate scaling with very low FPS (e.g., stop motion)."""
+        sm = SmartMode()
+        stream = {"height": 1080, "r_frame_rate": "12/1", "color_space": "", "codec_name": "h264"}
+        # Low FPS: 1200000 * 1.3 = 1560000
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_560_000
+
+    def test_scale_bitrate_very_high_fps(self):
+        """Test bitrate scaling with very high FPS (e.g., 60fps)."""
+        sm = SmartMode()
+        stream = {"height": 1080, "r_frame_rate": "60/1", "color_space": "", "codec_name": "h264"}
+        # High FPS: 1200000 * 1.7 = 2040000
+        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+
+    def test_scale_bitrate_ntsc_fps(self):
+        """Test bitrate scaling with NTSC fractional FPS (29.97)."""
+        sm = SmartMode()
+        stream = {
+            "height": 720,
+            "r_frame_rate": "30000/1001",  # 29.97 fps
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # 29.97 >= 29.5, so scale = 1.7
+        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+
+    def test_scale_bitrate_pal_fps(self):
+        """Test bitrate scaling with PAL FPS (25)."""
+        sm = SmartMode()
+        stream = {"height": 720, "r_frame_rate": "25/1", "color_space": "", "codec_name": "h264"}
+        # 25 fps, scale = 1.5
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_800_000
+
+    def test_scale_bitrate_film_fps(self):
+        """Test bitrate scaling with film FPS (23.976)."""
+        sm = SmartMode()
+        stream = {
+            "height": 1080,
+            "r_frame_rate": "24000/1001",  # 23.976 fps
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # < 25 fps, scale = 1.3
+        assert sm.scale_bitrate(stream, 1_200_000) == 1_560_000
+
+    def test_get_bitrate_fallback_4k(self):
+        """Test fallback bitrate for 4K resolution."""
+        sm = SmartMode()
+        stream = {"height": 2160}  # 4K
+        # Should use DEFAULT_SD_BITRATE * 5 = 6000000
+        assert sm.get_bitrate(stream) == 6_000_000
+
+    def test_get_bitrate_fallback_ultra_low_res(self):
+        """Test fallback bitrate for very low resolution (e.g., 240p)."""
+        sm = SmartMode()
+        stream = {"height": 240}
+        # Should use DEFAULT_SD_BITRATE = 1200000
+        assert sm.get_bitrate(stream) == 1_200_000
+
+    def test_get_bitrate_with_zero_value(self):
+        """Test fallback when bitrate is zero or empty string."""
+        sm = SmartMode()
+        stream = {"bit_rate": "0", "height": 720}
+        # Zero bitrate should be treated as valid (even if unusual)
+        assert sm.get_bitrate(stream) == 0
+
+        stream = {"bit_rate": "", "height": 720}
+        # Empty string should trigger fallback
+        assert sm.get_bitrate(stream) == 3_000_000
+
+    def test_get_bitrate_with_none_value(self):
+        """Test fallback when bitrate is None."""
+        sm = SmartMode()
+        stream = {"bit_rate": None, "height": 1080}
+        # None should trigger fallback
+        assert sm.get_bitrate(stream) == 6_000_000
+
+    def test_scale_bitrate_missing_all_fields(self):
+        """Test bitrate scaling with all fields missing (complete fallback)."""
+        sm = SmartMode()
+        stream = {}
+        # Should use defaults: height=480, fps=30, color_space=""
+        # height <= 480, so SD -> scale = 1.2
+        result = sm.scale_bitrate(stream, 1_200_000)
+        assert result == 1_440_000
+
+    def test_scale_bitrate_with_integer_fps(self):
+        """Test bitrate scaling when FPS is already an integer."""
+        sm = SmartMode()
+        stream = {"height": 1080, "r_frame_rate": 30, "color_space": "", "codec_name": "h264"}
+        # FPS 30 >= 29.5, scale = 1.7
+        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+
+    def test_scale_bitrate_with_float_fps(self):
+        """Test bitrate scaling when FPS is a float."""
+        sm = SmartMode()
+        stream = {
+            "height": 1080,
+            "r_frame_rate": 29.97,
+            "color_space": "",
+            "codec_name": "h264",
+        }
+        # FPS 29.97 >= 29.5, scale = 1.7
+        assert sm.scale_bitrate(stream, 1_200_000) == 2_040_000
+
+    def test_sd_with_bt470bg_overrides_height(self):
+        """Test that bt470bg color space forces SD even for HD resolution."""
+        sm = SmartMode()
+        # Even at 1080p, bt470bg should be classified as SD
+        assert sm.is_sd(1080, "bt470bg") is True
+        scale = sm.calculate_scale_factor(1080, 30, "bt470bg")
+        assert scale == 1.2  # SD scale factor
+
+    def test_get_bitrate_format_fallback_when_stream_invalid(self):
+        """Test format bitrate is used when stream bitrate is invalid."""
+        sm = SmartMode()
+        stream = {"bit_rate": "not_a_number", "height": 720}
+        format_info = {"bit_rate": "2000000"}
+        assert sm.get_bitrate(stream, format_info) == 2_000_000
+
+    def test_get_bitrate_both_sources_invalid(self):
+        """Test fallback when both stream and format bitrates are invalid."""
+        sm = SmartMode()
+        stream = {"bit_rate": "invalid", "height": 720}
+        format_info = {"bit_rate": "also_invalid"}
+        # Should fallback to height-based calculation
+        assert sm.get_bitrate(stream, format_info) == 3_000_000
+
+    def test_scale_bitrate_edge_case_zero_base(self):
+        """Test scaling with zero base bitrate."""
+        sm = SmartMode()
+        stream = {"height": 1080, "r_frame_rate": "30/1", "color_space": "", "codec_name": "h264"}
+        # 0 * 1.7 = 0
+        assert sm.scale_bitrate(stream, 0) == 0
+
+    def test_codec_adjustment_future_enhancement(self):
+        """Test codec adjustment for various codecs (currently all 1.0)."""
+        sm = SmartMode()
+        # All should currently return 1.0 (neutral)
+        assert sm.get_codec_adjustment("h264") == 1.0
+        assert sm.get_codec_adjustment("h265") == 1.0
+        assert sm.get_codec_adjustment("mpeg1video") == 1.0
+        assert sm.get_codec_adjustment("vp9") == 1.0
+        assert sm.get_codec_adjustment("av1") == 1.0
