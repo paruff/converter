@@ -1,11 +1,32 @@
 import json
-import subprocess
+import logging
 from pathlib import Path
 from typing import Any
 
+from .logging_utils import run_subprocess
 
-def probe(path: Path) -> dict[str, Any] | None:
-    result = subprocess.run(
+
+def probe(path: Path, dry_run: bool = False) -> dict[str, Any] | None:
+    """Probe a video file using ffprobe.
+    
+    Args:
+        path: Path to video file
+        dry_run: If True, skip actual probe
+        
+    Returns:
+        Probe data as dict, or None on failure
+    """
+    logger = logging.getLogger("converter")
+    
+    if dry_run:
+        logger.info(f"[DRY-RUN] Would probe: {path}")
+        # Return minimal mock data for dry-run
+        return {
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+            "format": {}
+        }
+    
+    result = run_subprocess(
         [
             "ffprobe",
             "-v",
@@ -16,10 +37,17 @@ def probe(path: Path) -> dict[str, Any] | None:
             "-show_format",
             str(path),
         ],
-        capture_output=True,
-        text=True,
+        logger=logger,
+        capture_output=True
     )
-    if result.returncode != 0:
+    
+    if not result.success:
+        logger.error(f"Failed to probe {path}")
         return None
-    data: dict[str, Any] = json.loads(result.stdout)
-    return data
+    
+    try:
+        data: dict[str, Any] = json.loads(result.stdout)
+        return data
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse ffprobe JSON: {e}")
+        return None

@@ -2,6 +2,7 @@
 """Command-line interface for Media Converter."""
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -9,8 +10,48 @@ from .config import DEFAULT_SD_BITRATE, LOG_DIR, ORIG_DIR, TMP_DIR
 from .encode import encode
 from .ffprobe_utils import probe
 from .file_classifier import classify_video
+from .logging_utils import get_file_logger, setup_logging
 from .repair import repair_mpeg, repair_wmv, repair_xvid
 from .smart_mode import smart_scale
+
+# Supported video file extensions
+SUPPORTED_EXTENSIONS = {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}
+
+
+def validate_path(path: Path) -> str | None:
+    """Validate input path.
+    
+    Args:
+        path: Path to validate
+        
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not path.exists():
+        return f"Path does not exist: {path}"
+    
+    if not path.is_file() and not path.is_dir():
+        return f"Path is neither a file nor directory: {path}"
+    
+    if path.is_file():
+        # Check if file is readable
+        try:
+            path.stat()
+        except PermissionError:
+            return f"File is not readable: {path}"
+        
+        # Check if supported extension
+        if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            return f"Unsupported file type: {path.suffix} (supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))})"
+    
+    elif path.is_dir():
+        # Check if directory is readable
+        try:
+            list(path.iterdir())
+        except PermissionError:
+            return f"Directory is not readable: {path}"
+    
+    return None
 
 
 def get_bitrate(info: dict) -> int:
@@ -26,6 +67,7 @@ def convert_file(
     output_dir: Path | None = None,
     keep_original: bool = False,
     verbose: bool = False,
+    dry_run: bool = False,
 ) -> bool:
     """Convert a single video file.
 
@@ -34,54 +76,76 @@ def convert_file(
         output_dir: Optional output directory (default: same as input)
         keep_original: If True, keep the original file
         verbose: If True, print detailed progress
+        dry_run: If True, perform dry run without actual conversion
 
     Returns:
         True if conversion succeeded, False otherwise
     """
-    if verbose:
-        print("  Probing file...")
+    logger = logging.getLogger("converter")
+    file_logger = get_file_logger(path)
+    
+    file_logger.info(f"Starting conversion: {path}")
+    
+    # Validate file
+    if not path.exists():
+        logger.error(f"File does not exist: {path}")
+        return False
+    
+    if not path.is_file():
+        logger.error(f"Path is not a file: {path}")
+        return False
+    
+    # Check if readable
+    try:
+        path.stat()
+    except PermissionError:
+        logger.error(f"File is not readable: {path}")
+        return False
+    
+    # Check extension
+    if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        logger.error(f"Unsupported file type: {path.suffix}")
+        return False
+    
+    logger.debug(f"Probing file: {path.name}")
 
     # Probe file
-    info = probe(path)
+    info = probe(path, dry_run=dry_run)
     if not info:
-        print(f"  ✗ Failed to probe file: {path.name}")
+        logger.error(f"Failed to probe file: {path.name}")
         return False
 
     # Find video stream
     video_streams = [s for s in info["streams"] if s["codec_type"] == "video"]
     if not video_streams:
-        print(f"  ✗ No video stream found in: {path.name}")
+        logger.error(f"No video stream found in: {path.name}")
         return False
 
     video_stream = video_streams[0]
     codec = classify_video(video_stream)
 
-    if verbose:
-        print(f"  Detected codec: {codec}")
+    logger.info(f"Detected codec: {codec}")
 
     # Calculate bitrate with smart scaling
     scale = smart_scale({"video": video_stream})
     bitrate = get_bitrate({"video": video_stream})
     target_kbps = int((bitrate / 1000) * scale)
 
-    if verbose:
-        print(f"  Original bitrate: {bitrate // 1000} kbps")
-        print(f"  Target bitrate: {target_kbps} kbps (Smart Mode: {scale:.1f}x)")
+    logger.info(f"Original bitrate: {bitrate // 1000} kbps")
+    logger.info(f"Target bitrate: {target_kbps} kbps (Smart Mode: {scale:.1f}x)")
 
     # Repair pipeline
     if codec == "mpeg1":
-        if verbose:
-            print("  Repairing MPEG-1 stream...")
-        repaired = repair_mpeg(path)
+        logger.info("Repair pipeline: MPEG-1")
+        repaired = repair_mpeg(path, dry_run=dry_run)
     elif codec == "wmv":
-        if verbose:
-            print("  Repairing WMV stream...")
-        repaired = repair_wmv(path)
+        logger.info("Repair pipeline: WMV")
+        repaired = repair_wmv(path, dry_run=dry_run)
     elif codec == "xvid":
-        if verbose:
-            print("  Repairing XviD stream...")
-        repaired = repair_xvid(path)
+        logger.info("Repair pipeline: XviD")
+        repaired = repair_xvid(path, dry_run=dry_run)
     else:
+        logger.info("No repair needed")
         repaired = path
 
     # Determine output path
@@ -91,25 +155,24 @@ def convert_file(
     else:
         out = path.with_suffix(".mkv")
 
-    if verbose:
-        print("  Encoding to MKV...")
+    logger.info(f"Output: {out}")
 
     # Encode
     try:
-        encode(repaired, out, target_kbps)
+        encode(repaired, out, target_kbps, dry_run=dry_run)
     except Exception as e:
-        print(f"  ✗ Encoding failed: {e}")
+        logger.exception(f"Encoding failed: {e}")
         return False
 
     # Handle original file
-    if not keep_original:
+    if not dry_run and not keep_original:
         ORIG_DIR.mkdir(exist_ok=True)
         path.rename(ORIG_DIR / path.name)
-        if verbose:
-            print("  Moved original to originals/")
+        logger.info(f"Moved original to originals/")
+    elif dry_run and not keep_original:
+        logger.info(f"[DRY-RUN] Would move original to originals/")
 
-    if verbose:
-        print(f"  ✓ Successfully converted to {out.name}")
+    logger.info(f"✓ Successfully converted to {out.name}")
 
     return True
 
@@ -120,6 +183,7 @@ def convert_directory(
     output_dir: Path | None = None,
     keep_original: bool = False,
     verbose: bool = False,
+    dry_run: bool = False,
 ) -> tuple[int, int]:
     """Convert all video files in a directory.
 
@@ -129,42 +193,41 @@ def convert_directory(
         output_dir: Optional output directory
         keep_original: If True, keep original files
         verbose: If True, print detailed progress
+        dry_run: If True, perform dry run without actual conversion
 
     Returns:
         Tuple of (successful_count, failed_count)
     """
-    if verbose:
-        print(f"\nScanning directory: {root}")
-
-    extensions = {".avi", ".mpg", ".mpeg", ".wmv", ".mov"}
+    logger = logging.getLogger("converter")
+    
+    logger.info(f"Scanning directory: {root}")
 
     if recursive:
-        files = [p for p in root.rglob("*") if p.suffix.lower() in extensions]
+        files = [p for p in root.rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS]
     else:
-        files = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() in extensions]
+        files = [p for p in root.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
 
     if not files:
-        print("No video files found")
+        logger.warning("No video files found")
         return 0, 0
 
-    print(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
+    logger.info(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
 
     success_count = 0
     fail_count = 0
 
     for idx, path in enumerate(files, 1):
-        if verbose:
-            print(f"\nProcessing file {idx} of {len(files)}: {path.name}")
-        if convert_file(path, output_dir, keep_original, verbose):
+        logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
+        if convert_file(path, output_dir, keep_original, verbose, dry_run):
             success_count += 1
         else:
             fail_count += 1
 
     # Print summary
-    print("\nConversion complete!")
-    print(f"Success: {success_count} file{'s' if success_count != 1 else ''}")
+    logger.info("Conversion complete!")
+    logger.info(f"Success: {success_count} file{'s' if success_count != 1 else ''}")
     if fail_count > 0:
-        print(f"Failed: {fail_count} file{'s' if fail_count != 1 else ''}")
+        logger.info(f"Failed: {fail_count} file{'s' if fail_count != 1 else ''}")
 
     return success_count, fail_count
 
@@ -190,6 +253,9 @@ Examples:
 
   # Keep original files
   media-converter /path/to/videos --keep-original
+  
+  # Dry run to see what would be done
+  media-converter /path/to/videos --dry-run
         """,
     )
 
@@ -215,51 +281,84 @@ Examples:
     )
 
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run mode - show what would be done without executing"
+    )
 
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     args = parser.parse_args()
 
-    # Print welcome message
-    print("Media Converter v0.1.0")
+    # Setup logging
+    logger = setup_logging(verbose=args.verbose)
+    
+    logger.info("Media Converter v0.1.0")
+    
+    if args.dry_run:
+        logger.info("DRY-RUN MODE ENABLED - No files will be modified")
 
-    if args.verbose:
-        print(f"Input: {args.path}")
-        if args.output:
-            print(f"Output: {args.output}")
-        else:
-            print("Output: (same as input)")
-        print(f"Recursive: {'Yes' if args.recursive else 'No'}")
-        print(f"Keep Original: {'Yes' if args.keep_original else 'No'}")
+    logger.debug(f"Input: {args.path}")
+    if args.output:
+        logger.debug(f"Output: {args.output}")
+    else:
+        logger.debug("Output: (same as input)")
+    logger.debug(f"Recursive: {'Yes' if args.recursive else 'No'}")
+    logger.debug(f"Keep Original: {'Yes' if args.keep_original else 'No'}")
 
     # Create necessary directories
     LOG_DIR.mkdir(exist_ok=True)
-    TMP_DIR.mkdir(exist_ok=True)
+    if not args.dry_run:
+        TMP_DIR.mkdir(exist_ok=True)
 
-    # Check if path exists
-    if not args.path.exists():
-        print(f"Error: Path does not exist: {args.path}")
+    # Validate input path
+    error = validate_path(args.path)
+    if error:
+        logger.error(error)
         return 1
 
     # Process file or directory
     if args.path.is_file():
-        if args.verbose:
-            print(f"\nProcessing single file: {args.path.name}")
-        success = convert_file(args.path, args.output, args.keep_original, args.verbose)
+        logger.info(f"Processing single file: {args.path.name}")
+        success = convert_file(
+            args.path, 
+            args.output, 
+            args.keep_original, 
+            args.verbose,
+            args.dry_run
+        )
         if success:
-            if not args.verbose:
-                print(f"✓ Successfully converted {args.path.name}")
             return 0
-        print(f"✗ Failed to convert {args.path.name}")
+        logger.error(f"✗ Failed to convert {args.path.name}")
         return 1
+    
     if args.path.is_dir():
+        # Check if directory is empty
+        try:
+            files = [p for p in args.path.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS]
+            if not files and not args.recursive:
+                logger.warning(f"No supported video files found in {args.path}")
+                logger.info(f"Supported extensions: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
+                logger.info("Use --recursive to search subdirectories")
+                return 1
+        except PermissionError:
+            logger.error(f"Cannot read directory: {args.path}")
+            return 1
+        
         success_count, fail_count = convert_directory(
-            args.path, args.recursive, args.output, args.keep_original, args.verbose
+            args.path, 
+            args.recursive, 
+            args.output, 
+            args.keep_original, 
+            args.verbose,
+            args.dry_run
         )
 
         return 0 if fail_count == 0 else 1
 
-    print(f"Error: Invalid path: {args.path}")
+    logger.error(f"Invalid path: {args.path}")
     return 1
 
 
