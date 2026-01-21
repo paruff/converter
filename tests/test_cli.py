@@ -157,3 +157,48 @@ class TestNoInplaceOverwrite:
         # Output should be video.mkv, different from video.avi
         assert output_arg.name == "video.mkv"
         assert output_arg != input_path
+
+
+class TestCrossDeviceMove:
+    """Test that convert_file handles cross-device moves correctly."""
+
+    @patch("converter.cli.shutil.move")
+    @patch("converter.cli.encode")
+    @patch("converter.cli.probe")
+    @patch("converter.cli.get_file_logger")
+    def test_cross_device_move(self, mock_logger, mock_probe, mock_encode, mock_shutil_move):
+        """Test that shutil.move is used for moving originals (handles cross-device)."""
+        # Setup mocks
+        mock_probe.return_value = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "bit_rate": "2000000",
+                    "height": 720,
+                }
+            ]
+        }
+        mock_logger.return_value = Mock()
+        mock_encode.return_value = None
+
+        # Create a mock .avi file path
+        input_path = Path("/test/video.avi")
+
+        mock_stat = Mock()
+        mock_stat.st_mode = 0o100644  # Regular file
+        mock_stat.st_size = 1024
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(Path, "stat", return_value=mock_stat),
+            patch.object(Path, "mkdir"),
+        ):
+            convert_file(input_path, keep_original=False, dry_run=False)
+
+        # Verify shutil.move was called (not Path.rename)
+        mock_shutil_move.assert_called_once()
+        call_args = mock_shutil_move.call_args[0]
+        # shutil.move should be called with string paths
+        assert call_args[0] == str(input_path)
+        assert "originals" in call_args[1]
