@@ -15,6 +15,7 @@ from .logging_utils import get_file_logger, setup_logging
 from .parallel import ParallelEncoder
 from .repair import repair_mpeg, repair_wmv, repair_xvid
 from .smart_mode import smart_scale
+from .summary import ConversionSummary
 
 # Supported video file extensions
 SUPPORTED_EXTENSIONS = {".avi", ".mpg", ".mpeg", ".wmv", ".mov", ".mp4", ".mkv"}
@@ -70,7 +71,7 @@ def convert_file(
     keep_original: bool = False,
     verbose: bool = False,
     dry_run: bool = False,
-) -> bool:
+) -> tuple[bool, bool, str | None, str | None]:
     """Convert a single video file.
 
     Args:
@@ -81,47 +82,56 @@ def convert_file(
         dry_run: If True, perform dry run without actual conversion
 
     Returns:
-        True if conversion succeeded, False otherwise
+        Tuple of (success, repaired, warning, error)
     """
     logger = logging.getLogger("converter")
     file_logger = get_file_logger(path)
 
     file_logger.info(f"Starting conversion: {path}")
 
+    repaired = False
+    warning = None
+
     # Validate file
     if not path.exists():
-        logger.error(f"File does not exist: {path}")
-        return False
+        error = f"File does not exist: {path}"
+        logger.error(error)
+        return False, False, None, error
 
     if not path.is_file():
-        logger.error(f"Path is not a file: {path}")
-        return False
+        error = f"Path is not a file: {path}"
+        logger.error(error)
+        return False, False, None, error
 
     # Check if readable
     try:
         path.stat()
     except PermissionError:
-        logger.error(f"File is not readable: {path}")
-        return False
+        error = f"File is not readable: {path}"
+        logger.error(error)
+        return False, False, None, error
 
     # Check extension
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        logger.error(f"Unsupported file type: {path.suffix}")
-        return False
+        error = f"Unsupported file type: {path.suffix}"
+        logger.error(error)
+        return False, False, None, error
 
     logger.debug(f"Probing file: {path.name}")
 
     # Probe file
     info = probe(path, dry_run=dry_run)
     if not info:
-        logger.error(f"Failed to probe file: {path.name}")
-        return False
+        error = f"Failed to probe file: {path.name}"
+        logger.error(error)
+        return False, False, None, error
 
     # Find video stream
     video_streams = [s for s in info["streams"] if s["codec_type"] == "video"]
     if not video_streams:
-        logger.error(f"No video stream found in: {path.name}")
-        return False
+        error = f"No video stream found in: {path.name}"
+        logger.error(error)
+        return False, False, None, error
 
     video_stream = video_streams[0]
     codec = classify_video(video_stream)
@@ -139,16 +149,19 @@ def convert_file(
     # Repair pipeline
     if codec == "mpeg1":
         logger.info("Repair pipeline: MPEG-1")
-        repaired = repair_mpeg(path, dry_run=dry_run)
+        repaired_path = repair_mpeg(path, dry_run=dry_run)
+        repaired = True
     elif codec == "wmv":
         logger.info("Repair pipeline: WMV")
-        repaired = repair_wmv(path, dry_run=dry_run)
+        repaired_path = repair_wmv(path, dry_run=dry_run)
+        repaired = True
     elif codec == "xvid":
         logger.info("Repair pipeline: XviD")
-        repaired = repair_xvid(path, dry_run=dry_run)
+        repaired_path = repair_xvid(path, dry_run=dry_run)
+        repaired = True
     else:
         logger.info("No repair needed")
-        repaired = path
+        repaired_path = path
 
     # Determine output path
     if output_dir:
@@ -165,10 +178,11 @@ def convert_file(
 
     # Encode
     try:
-        encode(repaired, out, target_kbps, dry_run=dry_run)
+        encode(repaired_path, out, target_kbps, dry_run=dry_run)
     except Exception as e:
-        logger.exception(f"Encoding failed: {e}")
-        return False
+        error = f"Encoding failed: {e}"
+        logger.exception(error)
+        return False, repaired, None, error
 
     # Handle original file
     if not dry_run and not keep_original:
@@ -180,7 +194,7 @@ def convert_file(
 
     logger.info(f"✓ Successfully converted to {out.name}")
 
-    return True
+    return True, repaired, warning, None
 
 
 def convert_directory(
@@ -227,6 +241,9 @@ def convert_directory(
 
     logger.info(f"Found {len(files)} video file{'s' if len(files) != 1 else ''}")
 
+    # Create summary tracker
+    summary = ConversionSummary()
+
     # Use parallel encoding if enabled and more than 1 file
     if parallel and len(files) > 1:
         encoder = ParallelEncoder(
@@ -235,7 +252,11 @@ def convert_directory(
 
         def convert_wrapper(path: Path) -> bool:
             """Wrapper for convert_file to use with parallel encoder."""
-            return convert_file(path, output_dir, keep_original, verbose, dry_run)
+            success, repaired, warning, error = convert_file(
+                path, output_dir, keep_original, verbose, dry_run
+            )
+            summary.add_result(path, success, repaired, warning, error)
+            return success
 
         def progress_callback(path: Path, success: bool) -> None:
             """Callback to log progress."""
@@ -255,16 +276,18 @@ def convert_directory(
 
         for idx, path in enumerate(files, 1):
             logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
-            if convert_file(path, output_dir, keep_original, verbose, dry_run):
+            success, repaired, warning, error = convert_file(
+                path, output_dir, keep_original, verbose, dry_run
+            )
+            summary.add_result(path, success, repaired, warning, error)
+            if success:
                 success_count += 1
             else:
                 fail_count += 1
 
-    # Print summary
-    logger.info("Conversion complete!")
-    logger.info(f"Success: {success_count} file{'s' if success_count != 1 else ''}")
-    if fail_count > 0:
-        logger.info(f"Failed: {fail_count} file{'s' if fail_count != 1 else ''}")
+    # Print detailed summary
+    summary_text = summary.format_summary(LOG_DIR, ORIG_DIR, TMP_DIR)
+    logger.info(summary_text)
 
     return success_count, fail_count
 
@@ -384,9 +407,16 @@ Examples:
     # Process file or directory
     if args.path.is_file():
         logger.info(f"Processing single file: {args.path.name}")
-        success = convert_file(
+        success, repaired, warning, error = convert_file(
             args.path, args.output, args.keep_original, args.verbose, args.dry_run
         )
+        
+        # Display summary for single file
+        summary = ConversionSummary()
+        summary.add_result(args.path, success, repaired, warning, error)
+        summary_text = summary.format_summary(LOG_DIR, ORIG_DIR, TMP_DIR)
+        logger.info(summary_text)
+        
         if success:
             return 0
         logger.error(f"✗ Failed to convert {args.path.name}")
