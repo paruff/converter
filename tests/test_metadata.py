@@ -1,12 +1,8 @@
 """Tests for metadata module."""
 
 import json
-import logging
 import subprocess
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 from converter.metadata import (
     embed_metadata,
@@ -145,9 +141,7 @@ class TestFetchTVMazeMetadata:
         # Mock episode 404 error
         import urllib.error
 
-        episode_error = urllib.error.HTTPError(
-            "url", 404, "Not Found", {}, None  # type: ignore
-        )
+        episode_error = urllib.error.HTTPError("url", 404, "Not Found", {}, None)  # type: ignore
 
         mock_urlopen.side_effect = [search_response, episode_error]
 

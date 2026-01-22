@@ -1,20 +1,24 @@
 """Metadata fetching and embedding for TV show episodes."""
 
+import json
 import logging
 import re
 import subprocess
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Optional
-
-try:
-    import urllib.request
-    import urllib.parse
-    import json
-except ImportError:
-    raise ImportError("Required standard library modules not available")
+from typing import TypedDict
 
 
-def parse_episode_info(filename: str) -> Optional[dict[str, str | int]]:
+class EpisodeInfo(TypedDict):
+    """Episode information parsed from filename."""
+
+    show: str
+    season: int
+    episode: int
+
+
+def parse_episode_info(filename: str) -> EpisodeInfo | None:
     """Parse TV show, season, and episode information from filename.
 
     Supports formats like:
@@ -53,9 +57,7 @@ def parse_episode_info(filename: str) -> Optional[dict[str, str | int]]:
     return None
 
 
-def fetch_tvmaze_metadata(
-    show_name: str, season: int, episode: int
-) -> Optional[dict[str, str]]:
+def fetch_tvmaze_metadata(show_name: str, season: int, episode: int) -> dict[str, str] | None:
     """Fetch episode metadata from TVMaze API.
 
     Args:
@@ -105,16 +107,12 @@ def fetch_tvmaze_metadata(
         if metadata["summary"]:
             metadata["summary"] = re.sub(r"<[^>]+>", "", metadata["summary"])
 
-        logger.info(
-            f"Fetched metadata: {metadata['title']} (aired: {metadata['airdate']})"
-        )
+        logger.info(f"Fetched metadata: {metadata['title']} (aired: {metadata['airdate']})")
         return metadata
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            logger.warning(
-                f"Episode not found on TVMaze: {show_name} S{season:02d}E{episode:02d}"
-            )
+            logger.warning(f"Episode not found on TVMaze: {show_name} S{season:02d}E{episode:02d}")
         else:
             logger.warning(f"TVMaze API error: {e.code} - {e.reason}")
         return None
@@ -129,9 +127,7 @@ def fetch_tvmaze_metadata(
         return None
 
 
-def embed_metadata(
-    mkv_path: Path, metadata: dict[str, str], dry_run: bool = False
-) -> bool:
+def embed_metadata(mkv_path: Path, metadata: dict[str, str], dry_run: bool = False) -> bool:
     """Embed metadata into an MKV file using mkvpropedit.
 
     Args:
@@ -173,18 +169,13 @@ def embed_metadata(
 
         logger.debug(f"Running mkvpropedit: {' '.join(cmd)}")
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, check=False, timeout=30
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
 
         if result.returncode == 0:
             logger.info(f"✓ Metadata embedded into {mkv_path.name}")
             return True
-        else:
-            logger.warning(
-                f"mkvpropedit failed with code {result.returncode}: {result.stderr}"
-            )
-            return False
+        logger.warning(f"mkvpropedit failed with code {result.returncode}: {result.stderr}")
+        return False
 
     except FileNotFoundError:
         logger.error(
