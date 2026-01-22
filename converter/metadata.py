@@ -103,9 +103,15 @@ def fetch_tvmaze_metadata(show_name: str, season: int, episode: int) -> dict[str
             "runtime": str(episode_data.get("runtime", "")),
         }
 
-        # Clean HTML tags from summary
+        # Clean HTML tags and entities from summary
         if metadata["summary"]:
-            metadata["summary"] = re.sub(r"<[^>]+>", "", metadata["summary"])
+            import html
+
+            # Unescape HTML entities first
+            clean_text = html.unescape(metadata["summary"])
+            # Remove HTML tags
+            clean_text = re.sub(r"<[^>]*>", "", clean_text)
+            metadata["summary"] = clean_text
 
         logger.info(f"Fetched metadata: {metadata['title']} (aired: {metadata['airdate']})")
         return metadata
@@ -150,25 +156,33 @@ def embed_metadata(mkv_path: Path, metadata: dict[str, str], dry_run: bool = Fal
         return True
 
     try:
-        # Build mkvpropedit command
+        # Build mkvpropedit command as a list (safe from injection)
+        # Each argument is passed separately to subprocess, not interpreted by shell
         cmd = ["mkvpropedit", str(mkv_path)]
 
         # Add title if available
         if metadata.get("title"):
-            cmd.extend(["--edit", "info", "--set", f"title={metadata['title']}"])
+            # Using format string to create the full argument value
+            # This is safe because we're not using shell=True in subprocess.run
+            title_value = metadata["title"].replace("\n", " ").replace("\r", " ")
+            cmd.extend(["--edit", "info", "--set", f"title={title_value}"])
 
         # Add description/comment if available
         if metadata.get("summary"):
-            # Limit summary length to avoid issues
-            summary = metadata["summary"][:500]
+            # Limit summary length and sanitize newlines
+            summary = metadata["summary"][:500].replace("\n", " ").replace("\r", " ")
             cmd.extend(["--edit", "info", "--set", f"comment={summary}"])
 
-        # Add date if available
+        # Add date if available (format: YYYY-MM-DD from TVMaze)
         if metadata.get("airdate"):
-            cmd.extend(["--edit", "info", "--set", f"date={metadata['airdate']}"])
+            # Validate date format to prevent injection
+            airdate = metadata["airdate"]
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", airdate):
+                cmd.extend(["--edit", "info", "--set", f"date={airdate}"])
 
         logger.debug(f"Running mkvpropedit: {' '.join(cmd)}")
 
+        # Using list argument (not shell=True) prevents command injection
         result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
 
         if result.returncode == 0:
