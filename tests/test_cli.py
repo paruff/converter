@@ -35,8 +35,8 @@ class TestCLIIntegration:
     @patch("converter.cli.convert_file")
     def test_cli_single_file(self, mock_convert):
         """Test CLI with single file."""
-        # Mock convert_file to return success
-        mock_convert.return_value = True
+        # Mock convert_file to return success tuple
+        mock_convert.return_value = (True, False, None, None)
 
         # Create a temp file for testing
         with patch("converter.cli.Path") as mock_path_class:
