@@ -12,6 +12,7 @@ from .encode import encode
 from .ffprobe_utils import probe
 from .file_classifier import classify_video
 from .logging_utils import get_file_logger, setup_logging
+from .metadata import fetch_and_embed_metadata
 from .parallel import ParallelEncoder
 from .repair import repair_mpeg, repair_wmv, repair_xvid
 from .smart_mode import smart_scale
@@ -71,7 +72,8 @@ def convert_file(
     keep_original: bool = False,
     verbose: bool = False,
     dry_run: bool = False,
-) -> tuple[bool, bool, str | None, str | None]:
+    no_metadata: bool = False,
+) -> bool:
     """Convert a single video file.
 
     Args:
@@ -80,6 +82,7 @@ def convert_file(
         keep_original: If True, keep the original file
         verbose: If True, print detailed progress
         dry_run: If True, perform dry run without actual conversion
+        no_metadata: If True, skip metadata fetching and embedding
 
     Returns:
         Tuple of (success, repaired, warning, error)
@@ -184,6 +187,15 @@ def convert_file(
         logger.exception(error)
         return False, repaired, None, error
 
+    # Embed metadata (after encoding, before moving original)
+    if not no_metadata and out.suffix.lower() == ".mkv":
+        logger.info("Fetching and embedding metadata...")
+        try:
+            fetch_and_embed_metadata(out, dry_run=dry_run)
+        except Exception as e:
+            # Don't fail the conversion if metadata embedding fails
+            logger.warning(f"Metadata embedding failed: {e}")
+
     # Handle original file
     if not dry_run and not keep_original:
         ORIG_DIR.mkdir(exist_ok=True)
@@ -207,6 +219,7 @@ def convert_directory(
     parallel: bool = True,
     max_workers: int | None = None,
     show_progress: bool = True,
+    no_metadata: bool = False,
 ) -> tuple[int, int]:
     """Convert all video files in a directory.
 
@@ -220,6 +233,7 @@ def convert_directory(
         parallel: If True, use parallel encoding (default: True)
         max_workers: Number of parallel workers (default: from config)
         show_progress: If True, show progress bars (default: True)
+        no_metadata: If True, skip metadata fetching and embedding
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -252,11 +266,7 @@ def convert_directory(
 
         def convert_wrapper(path: Path) -> bool:
             """Wrapper for convert_file to use with parallel encoder."""
-            success, repaired, warning, error = convert_file(
-                path, output_dir, keep_original, verbose, dry_run
-            )
-            summary.add_result(path, success, repaired, warning, error)
-            return success
+            return convert_file(path, output_dir, keep_original, verbose, dry_run, no_metadata)
 
         def progress_callback(path: Path, success: bool) -> None:
             """Callback to log progress."""
@@ -276,11 +286,7 @@ def convert_directory(
 
         for idx, path in enumerate(files, 1):
             logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
-            success, repaired, warning, error = convert_file(
-                path, output_dir, keep_original, verbose, dry_run
-            )
-            summary.add_result(path, success, repaired, warning, error)
-            if success:
+            if convert_file(path, output_dir, keep_original, verbose, dry_run, no_metadata):
                 success_count += 1
             else:
                 fail_count += 1
@@ -368,6 +374,12 @@ Examples:
         help="Disable progress bars",
     )
 
+    parser.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="Disable metadata fetching and embedding",
+    )
+
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     args = parser.parse_args()
@@ -407,8 +419,8 @@ Examples:
     # Process file or directory
     if args.path.is_file():
         logger.info(f"Processing single file: {args.path.name}")
-        success, repaired, warning, error = convert_file(
-            args.path, args.output, args.keep_original, args.verbose, args.dry_run
+        success = convert_file(
+            args.path, args.output, args.keep_original, args.verbose, args.dry_run, args.no_metadata
         )
         
         # Display summary for single file
@@ -449,6 +461,7 @@ Examples:
             parallel=not args.no_parallel,
             max_workers=args.workers,
             show_progress=not args.no_progress,
+            no_metadata=args.no_metadata,
         )
 
         return 0 if fail_count == 0 else 1
