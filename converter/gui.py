@@ -310,7 +310,7 @@ class MediaConverterGUI:
                 self.progress["maximum"] = 1
                 self.progress_label.config(text=f"Processing: {path.name}")
 
-                success = convert_file(
+                success, _repaired, _warning, _error = convert_file(
                     path, output_dir, self.keep_original.get(), self.verbose.get()
                 )
 
@@ -350,9 +350,10 @@ class MediaConverterGUI:
 
                         def convert_wrapper(file_path: Path) -> bool:
                             """Wrapper for convert_file."""
-                            return convert_file(
+                            success, _repaired, _warning, _error = convert_file(
                                 file_path, output_dir, self.keep_original.get(), self.verbose.get()
                             )
+                            return success
 
                         def progress_callback(file_path: Path, success: bool) -> None:
                             """Update progress after each file."""
@@ -383,7 +384,7 @@ class MediaConverterGUI:
                                 text=f"Processing {idx}/{len(files)}: {file_path.name}"
                             )
 
-                            success = convert_file(
+                            success, _repaired, _warning, _error = convert_file(
                                 file_path, output_dir, self.keep_original.get(), self.verbose.get()
                             )
 

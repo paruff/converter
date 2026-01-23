@@ -73,7 +73,7 @@ def convert_file(
     verbose: bool = False,
     dry_run: bool = False,
     no_metadata: bool = False,
-) -> bool:
+) -> tuple[bool, bool, str | None, str | None]:
     """Convert a single video file.
 
     Args:
@@ -266,7 +266,11 @@ def convert_directory(
 
         def convert_wrapper(path: Path) -> bool:
             """Wrapper for convert_file to use with parallel encoder."""
-            return convert_file(path, output_dir, keep_original, verbose, dry_run, no_metadata)
+            success, repaired, warning, error = convert_file(
+                path, output_dir, keep_original, verbose, dry_run, no_metadata
+            )
+            summary.add_result(path, success, repaired, warning, error)
+            return success
 
         def progress_callback(path: Path, success: bool) -> None:
             """Callback to log progress."""
@@ -286,7 +290,11 @@ def convert_directory(
 
         for idx, path in enumerate(files, 1):
             logger.info(f"Processing file {idx} of {len(files)}: {path.name}")
-            if convert_file(path, output_dir, keep_original, verbose, dry_run, no_metadata):
+            success, repaired, warning, error = convert_file(
+                path, output_dir, keep_original, verbose, dry_run, no_metadata
+            )
+            summary.add_result(path, success, repaired, warning, error)
+            if success:
                 success_count += 1
             else:
                 fail_count += 1
@@ -419,16 +427,21 @@ Examples:
     # Process file or directory
     if args.path.is_file():
         logger.info(f"Processing single file: {args.path.name}")
-        success = convert_file(
-            args.path, args.output, args.keep_original, args.verbose, args.dry_run, args.no_metadata
+        success, repaired, warning, error = convert_file(
+            args.path,
+            args.output,
+            args.keep_original,
+            args.verbose,
+            args.dry_run,
+            args.no_metadata,
         )
-        
+
         # Display summary for single file
         summary = ConversionSummary()
         summary.add_result(args.path, success, repaired, warning, error)
         summary_text = summary.format_summary(LOG_DIR, ORIG_DIR, TMP_DIR)
         logger.info(summary_text)
-        
+
         if success:
             return 0
         logger.error(f"✗ Failed to convert {args.path.name}")
