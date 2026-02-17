@@ -60,10 +60,3 @@ def convert_directory(root: Path, dry_run: bool = False) -> None:
     for path in root.iterdir():
         if path.suffix.lower() in {".avi", ".mpg", ".mpeg", ".wmv", ".mov", ".mp4", ".mkv"}:
             convert_file(path, dry_run=dry_run)
-
-
-if __name__ == "__main__":
-    import sys
-
-    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
-    convert_directory(root)
