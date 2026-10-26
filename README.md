@@ -1,5 +1,9 @@
 # Media Converter Engine
 
+> **Moved.** This engine (probe, classify, repair, smart bitrate, encode) now lives in
+> [paruff/Media-Refinery](https://github.com/paruff/Media-Refinery) under `app/media/video/`
+> (see issue #49). New work happens there; this repository is no longer developed.
+
 A robust, modular media conversion engine designed to repair, normalize, and encode legacy or corrupted video files for Plex and Samsung TV compatibility.
 
 ## Features
